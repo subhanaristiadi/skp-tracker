@@ -29,7 +29,7 @@ Not included yet:
 
 ## Requirements
 
-- Node.js 22 or later. Supabase JS no longer supports Node.js 20.
+- Node.js 22.x. The project pins the Node 22 major line for compatibility with Supabase JS.
 - npm.
 - A dedicated Supabase project.
 

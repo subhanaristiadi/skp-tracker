@@ -75,11 +75,7 @@ const server = createServer(async (request, response) => {
       }),
     });
 
-    const tokenData = await tokenResponse.json() as {
-      refresh_token?: string;
-      error?: string;
-      error_description?: string;
-    };
+    const tokenData = await tokenResponse.json();
 
     if (!tokenResponse.ok) {
       throw new Error(tokenData.error_description ?? tokenData.error ?? "Token exchange failed.");

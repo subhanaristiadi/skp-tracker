@@ -13,7 +13,8 @@
     "lucide-react": "^0.468.0",
     "next": "^15.5.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "@ayocore/exceljs": "5.0.4"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",

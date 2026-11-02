@@ -13,6 +13,17 @@ type ImageInfo = {
   extension: "jpg" | "png" | "webp";
 };
 
+function sanitizeActivityFilename(value: string): string {
+  const cleaned = value
+    .normalize("NFC")
+    .replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/g, "");
+
+  return Array.from(cleaned).slice(0, 100).join("").replace(/[. ]+$/g, "") || "Aktivitas";
+}
+
 function detectImageType(bytes: Buffer): ImageInfo | null {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
     return { mimeType: "image/jpeg", extension: "jpg" };
@@ -184,7 +195,7 @@ export async function POST(request: Request) {
 
     const { data: activity, error: activityError } = await supabase
       .from("skp_activities")
-      .select("id,tanggal")
+      .select("id,tanggal,aktivitas")
       .eq("id", activityId)
       .maybeSingle();
 
@@ -219,7 +230,8 @@ export async function POST(request: Request) {
 
     googleAccessToken = await getGoogleAccessToken();
     const folderId = await getOrCreateFolder(googleAccessToken);
-    const filename = `SKP-${activity.tanggal}-${activityId}.${imageInfo.extension}`;
+    const activityName = sanitizeActivityFilename(activity.aktivitas);
+    const filename = `${activity.tanggal} - ${activityName}.${imageInfo.extension}`;
     const boundary = `skp_tracker_${randomUUID().replace(/-/g, "")}`;
 
     const metadata = {

@@ -19,3 +19,18 @@
 .photo-upload-trigger:hover,.photo-link:hover{background:#edf3ff}
 .photo-upload-trigger.disabled{opacity:.55;pointer-events:none}
 .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+
+.delete-confirmation{display:grid;gap:14px;margin-top:14px;padding:14px;border:1px solid #f0caca;border-radius:10px;background:#fff8f8}
+.delete-confirmation strong{display:block;margin-bottom:7px;font-size:13px}
+.delete-confirmation p{font-size:12px;line-height:1.55;color:#7d3434;margin:0 0 10px}
+.delete-reminder-copy{margin-top:10px!important}
+.delete-confirmation-actions{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.danger-button{background:#b42318;color:#fff}
+.danger-button:hover{background:#912018}
+.danger-text-button{background:transparent;color:#b42318;border:1px solid #f0caca;padding:7px 10px;font-size:12px}
+.danger-text-button:hover{background:#fff1f0}
+.delete-reminder{background:#fff7e8;color:#744b00;border:1px solid #f2d49a;line-height:1.55}
+.delete-reminder p{margin:6px 0 0}
+.delete-reminder a{display:inline-flex;align-items:center;gap:6px;margin-top:9px;color:#2457d6;font-weight:600;text-decoration:none}
+.delete-reminder a:hover{text-decoration:underline}
+@media(max-width:650px){.activity-photo-actions{align-items:flex-start;flex-wrap:wrap}.delete-confirmation-actions{justify-content:stretch}.delete-confirmation-actions button{flex:1}}

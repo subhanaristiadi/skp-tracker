@@ -1,12 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { LogOut, Plus, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatDate, SKP_INDICATORS, SkpActivity, SkpIndicator, todayInMakassar } from "@/lib/skp";
 
 export default function HomePage() {
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [activities, setActivities] = useState<SkpActivity[]>([]);
   const [email, setEmail] = useState("");
@@ -19,48 +20,72 @@ export default function HomePage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!supabase) { setLoading(false); return; }
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
     });
+
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
     });
+
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  async function loadActivities() {
-    if (!supabase || !session?.user) return;
+  const userId = session?.user.id;
+
+  const loadActivities = useCallback(async () => {
+    if (!supabase || !userId) return;
+
     const { data, error: queryError } = await supabase
       .from("skp_activities")
       .select("id,tanggal,aktivitas,indikator,photo_upload_status,drive_file_url,created_at")
       .order("tanggal", { ascending: false })
       .order("created_at", { ascending: false });
+
     if (queryError) setError(queryError.message);
     else setActivities((data ?? []) as SkpActivity[]);
-  }
+  }, [userId]);
 
-  useEffect(() => { loadActivities(); }, [session]);
+  useEffect(() => {
+    void loadActivities();
+  }, [loadActivities]);
 
   const count = useMemo(() => activities.length, [activities]);
 
   async function signIn(event: FormEvent) {
     event.preventDefault();
-    setError(""); setMessage("");
-    if (!supabase) return setError("Konfigurasi Supabase belum diisi. Salin .env.example menjadi .env.local.");
+    setError("");
+    setMessage("");
+
+    if (!supabase) {
+      setError("Konfigurasi Supabase belum diisi. Salin .env.example menjadi .env.local.");
+      return;
+    }
+
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
     if (authError) setError(authError.message);
   }
 
   async function saveActivity(event: FormEvent) {
     event.preventDefault();
-    setError(""); setMessage("");
-    if (!supabase || !session?.user) return;
-    if (!activity.trim() || !indicator) return setError("Lengkapi aktivitas dan pilih indikator.");
+    setError("");
+    setMessage("");
+
+    if (!supabase || !userId) return;
+    if (!activity.trim() || !indicator) {
+      setError("Lengkapi aktivitas dan pilih indikator.");
+      return;
+    }
+
     setSaving(true);
     const { error: insertError } = await supabase.from("skp_activities").insert({
-      user_id: session.user.id,
+      user_id: userId,
       tanggal: date || todayInMakassar(),
       aktivitas: activity.trim(),
       indikator: indicator,
@@ -68,8 +93,15 @@ export default function HomePage() {
       photo_upload_status: "not_required",
     });
     setSaving(false);
-    if (insertError) return setError(insertError.message);
-    setActivity(""); setDate(todayInMakassar()); setIndicator("");
+
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+
+    setActivity("");
+    setDate(todayInMakassar());
+    setIndicator("");
     setMessage("Aktivitas berhasil disimpan.");
     await loadActivities();
   }

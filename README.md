@@ -10,7 +10,7 @@ Included:
 - Create and list SKP activities.
 - Manual selection from the exact six official SKP indicators.
 - Activity date handling based on Asia/Makassar (WITA).
-- Supabase SQL migration with closed-list validation and per-user Row Level Security.
+- Supabase SQL migration with closed-list validation, per-user Row Level Security, and explicit Data API grants.
 
 Not included yet:
 - AI extraction or n8n webhook integration.
@@ -21,7 +21,7 @@ Not included yet:
 ## Architecture decisions
 
 - App: SKP Activity Tracker.
-- Database: dedicated Supabase project for SKP; do not reuse Finance Tracker tables or credentials.
+- Database: dedicated Supabase project `skp-tracker` (`tnksnsslohnvrscdbktx`); do not reuse Finance Tracker tables or credentials.
 - Source: web only in this stage.
 - Indicator: user-selected; no AI classification.
 - Photo: planned flow saves the activity first, then uploads an optional photo to Google Drive.
@@ -43,14 +43,14 @@ Not included yet:
    ```
 
 3. Copy `.env.example` to `.env.local`.
-4. In the dedicated SKP Supabase project, open SQL Editor and run `supabase/migrations/0001_initial_schema.sql`.
-5. Set the environment variables in `.env.local`:
+4. The Supabase URL is already set in the example file. Copy the project's **publishable key** from Supabase Dashboard → Project Settings → API Keys, then set:
 
    ```env
-   NEXT_PUBLIC_SUPABASE_URL=https://YOUR-SKP-PROJECT.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY
+   NEXT_PUBLIC_SUPABASE_URL=https://tnksnsslohnvrscdbktx.supabase.co
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
    ```
 
+5. The initial schema migration has been applied to the connected SKP Supabase project. For a new environment, run `supabase/migrations/0001_initial_schema.sql` in its SQL Editor.
 6. In Supabase Authentication, create the first user manually. For a private personal app, keep public sign-ups disabled unless there is a specific reason to enable them.
 7. Run:
 
@@ -62,8 +62,9 @@ Not included yet:
 
 ## Security notes
 
-- Never put a Supabase `service_role` key in `NEXT_PUBLIC_*` variables or browser code.
-- The browser uses only the project's publishable/anon key. Row Level Security is enabled by the migration.
+- Never put a Supabase `service_role` or secret API key in `NEXT_PUBLIC_*` variables or browser code.
+- The browser uses the project's publishable key only. Row Level Security restricts every row to its authenticated owner.
+- The table grants Data API access to the `authenticated` role only; anonymous access is revoked.
 - Use a dedicated Supabase project and credentials for SKP.
 - Do not commit `.env.local`.
 - Do not put Google Drive or n8n credentials in this repository.
@@ -90,13 +91,15 @@ This is the proposed Stage 1 application schema, not a change to the existing Wh
 
 ## Verification checklist
 
+- [x] Migration applied to the connected SKP Supabase project.
+- [x] `public.skp_activities` exists with the expected columns.
+- [x] RLS is enabled.
+- [x] SELECT, INSERT, UPDATE, DELETE policies are restricted to `authenticated` and `auth.uid() = user_id`.
 - [ ] `npm install` completes.
-- [ ] SQL migration succeeds in the dedicated SKP Supabase project.
 - [ ] A manually created user can sign in.
 - [ ] User can save an activity with each of the six valid indicators.
 - [ ] Activity appears in history after save and page refresh.
 - [ ] A second user cannot read or modify the first user's rows (RLS test).
-- [ ] Invalid indicator values are rejected by the database.
 - [ ] No `.env.local` or secrets are committed.
 
 ## Known limitations

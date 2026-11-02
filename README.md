@@ -7,7 +7,7 @@ A separate web application for recording SKP work activities. This repository is
 Included:
 - Next.js App Router starter using Next.js 15, React 19, TypeScript, and Supabase JS.
 - Supabase email/password sign-in.
-- Create and list SKP activities.
+- Create, list, and delete SKP activities.
 - Manual selection from the exact six official SKP indicators.
 - Activity date handling based on Asia/Makassar (WITA).
 - Supabase SQL migration with closed-list validation, per-user Row Level Security, and explicit Data API grants.
@@ -16,7 +16,7 @@ Not included yet:
 - AI extraction or n8n webhook integration.
 - WhatsApp-to-app synchronization. The current decision is web-only, so WhatsApp entries are not included in this app.
 - Google Drive photo upload is optional and performed after the SKP activity has been saved.
-- Edit/delete UI, analytics, and AI/n8n extraction.
+- Edit UI, analytics, and AI/n8n extraction.
 
 ## Architecture decisions
 
@@ -77,6 +77,13 @@ Not included yet:
 - Filename: `riwayat-aktivitas-skp-YYYY-MM.xlsx`.
 - The endpoint uses the signed-in user's JWT and the existing Supabase RLS policies. No additional key or database migration is required.
 - Months with no records still produce a workbook with a clear empty-period message.
+
+## Deleting an activity
+
+- The owner can delete an activity from the history list. The browser asks for confirmation before removing the Supabase row.
+- The delete query is scoped to the signed-in user's ID and is also protected by the existing `authenticated` DELETE RLS policy. No service-role key or schema migration is required.
+- Deleting an activity does **not** delete its Google Drive photo. The confirmation panel warns about this and provides the stored Drive file link when available.
+- After deletion, the app displays a reminder to manually delete the corresponding photo from the private `SKP Activity Tracker` Drive folder. This is intentionally a manual step; the app does not send a Drive delete request.
 
 ## Google Drive photo upload
 
@@ -175,5 +182,5 @@ This is the SKP Activity Tracker application schema, separate from the existing 
 ## Known limitations
 
 - The current implementation provides client-side Supabase authentication and relies on Supabase RLS for row isolation. Add server-side session handling before introducing privileged server features.
-- The UI supports create/read and optional photo upload/retry. Update/delete and analytics are future work.
+- The UI supports create/read/delete and optional photo upload/retry. Update and analytics are future work.
 - Google Drive upload requires the one-time OAuth configuration described above; no n8n integration is used.

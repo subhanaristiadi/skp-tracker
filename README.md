@@ -80,7 +80,7 @@ Not included yet:
 
 ## Google Drive photo upload
 
-Photo upload is optional and happens after the SKP activity row has been saved. The app uploads JPG, PNG, or WebP images up to 4 MB to a folder named `SKP Activity Tracker` in the authorized Google Drive. The folder and uploaded files remain private; the app does not create public sharing permissions.
+Photo upload is optional and happens after the SKP activity row has been saved. The app uploads JPG, PNG, or WebP images up to 4 MB to a folder named `SKP Activity Tracker` in the authorized Google Drive. The folder and uploaded files remain private; the app does not create public sharing permissions. Drive filenames use the activity date and a sanitized version of the activity description (for example, `2026-11-02 - Menyusun lesson plan Google Sheets.png`); long descriptions are shortened to keep filenames manageable.
 
 The server endpoint is `POST /api/activities/photo`. It requires the signed-in Supabase user's JWT, verifies that the activity belongs to that user through RLS, validates the actual image signature and size, uploads the image with the Google Drive API, and then stores `drive_file_id`, `drive_file_url`, and `photo_upload_status` in `public.skp_activities`. No n8n workflow is involved and no Supabase service-role key is used.
 

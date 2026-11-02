@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { LogOut, Plus, RefreshCw } from "lucide-react";
+import { Download, LogOut, Plus, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatDate, SKP_INDICATORS, SkpActivity, SkpIndicator, todayInMakassar } from "@/lib/skp";
 
@@ -18,6 +18,10 @@ export default function HomePage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [exportMonth, setExportMonth] = useState(todayInMakassar().slice(0, 7));
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState("");
+  const [exportError, setExportError] = useState("");
 
   useEffect(() => {
     if (!supabase) {
@@ -106,6 +110,51 @@ export default function HomePage() {
     await loadActivities();
   }
 
+  async function downloadMonthlyReport() {
+    if (!supabase || !session) return;
+
+    setExporting(true);
+    setExportMessage("");
+    setExportError("");
+
+    try {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+
+      if (sessionError || !accessToken) {
+        throw new Error("Sesi login tidak tersedia. Silakan login kembali.");
+      }
+
+      const response = await fetch(`/api/reports/monthly?month=${encodeURIComponent(exportMonth)}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(result?.error || "Gagal mengunduh laporan XLSX.");
+      }
+
+      const blob = await response.blob();
+      if (!blob.size) throw new Error("File XLSX yang diterima kosong.");
+
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `riwayat-aktivitas-skp-${exportMonth}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+
+      setExportMessage("File XLSX berhasil dibuat dan diunduh.");
+    } catch (downloadError) {
+      setExportError(downloadError instanceof Error ? downloadError.message : "Terjadi kesalahan saat mengunduh file.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function signOut() {
     if (supabase) await supabase.auth.signOut();
     setActivities([]);
@@ -164,7 +213,22 @@ export default function HomePage() {
       </section>
 
       <section className="panel">
-        <div className="section-heading"><div><h2>Riwayat aktivitas</h2><p className="muted">Data yang ditampilkan berasal dari akun ini.</p></div><button className="secondary" onClick={loadActivities}><RefreshCw size={15}/> Muat ulang</button></div>
+        <div className="section-heading history-heading">
+          <div><h2>Riwayat aktivitas</h2><p className="muted">Data yang ditampilkan berasal dari akun ini.</p></div>
+          <div className="history-actions">
+            <button className="secondary" type="button" onClick={loadActivities}><RefreshCw size={15}/> Muat ulang</button>
+          </div>
+        </div>
+        <div className="export-controls">
+          <label className="month-picker">Bulan laporan
+            <input type="month" value={exportMonth} onChange={e=>setExportMonth(e.target.value)} />
+          </label>
+          <button className="primary export-button" type="button" onClick={downloadMonthlyReport} disabled={exporting || !exportMonth}>
+            <Download size={16}/>{exporting ? "Menyiapkan XLSX..." : "Download XLSX"}
+          </button>
+        </div>
+        {exportMessage && <p className="alert success" role="status">{exportMessage}</p>}
+        {exportError && <p className="alert error" role="alert">{exportError}</p>}
         {activities.length === 0 ? <div className="empty">Belum ada aktivitas. Tambahkan catatan pertama melalui formulir di atas.</div> :
           <div className="activity-list">{activities.map(item=><article className="activity" key={item.id}>
             <div className="activity-meta"><span>{formatDate(item.tanggal)}</span><span className="status">{item.photo_upload_status === "uploaded" ? "Foto tersimpan" : item.photo_upload_status === "failed" ? "Upload foto gagal" : "Tanpa foto"}</span></div>

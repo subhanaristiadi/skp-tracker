@@ -163,7 +163,7 @@ export async function GET(request: Request) {
       });
     }
 
-    worksheet.autoFilter = { from: "A5", to: "D5" };
+    worksheet.autoFilter = { from: "A5", to: `D${Math.max(5, 5 + activities.length)}` };
     worksheet.views = [{ state: "frozen", ySplit: 5, topLeftCell: "A6" }];
     worksheet.pageSetup = {
       orientation: "landscape",

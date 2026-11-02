@@ -15,7 +15,7 @@ Included:
 Not included yet:
 - AI extraction or n8n webhook integration.
 - WhatsApp-to-app synchronization. The current decision is web-only, so WhatsApp entries are not included in this app.
-- Google Drive upload and photo upload UI.
+- Optional photo upload to a private Google Drive folder, performed after the SKP activity has been saved.
 - Edit/delete UI, analytics, Google Drive/photo upload, and AI/n8n extraction.
 
 ## Architecture decisions
@@ -78,6 +78,63 @@ Not included yet:
 - The endpoint uses the signed-in user's JWT and the existing Supabase RLS policies. No additional key or database migration is required.
 - Months with no records still produce a workbook with a clear empty-period message.
 
+## Google Drive photo upload
+
+Photo upload is optional and happens after the SKP activity row has been saved. The app uploads JPG, PNG, or WebP images up to 4 MB to a folder named `SKP Activity Tracker` in the authorized Google Drive. The folder and uploaded files remain private; the app does not create public sharing permissions.
+
+The server endpoint is `POST /api/activities/photo`. It requires the signed-in Supabase user's JWT, verifies that the activity belongs to that user through RLS, validates the actual image signature and size, uploads the image with the Google Drive API, and then stores `drive_file_id`, `drive_file_url`, and `photo_upload_status` in `public.skp_activities`. No n8n workflow is involved and no Supabase service-role key is used.
+
+### One-time Google Cloud setup
+
+1. Open the [Google Cloud Console](https://console.cloud.google.com/).
+2. Create or select a Google Cloud project and enable **Google Drive API**.
+3. Configure the Google Auth Platform consent screen. For an individual account, choose External and add the Google account used for Drive as a test user while setting up.
+4. Create an OAuth Client ID with application type **Web application**.
+5. Add this exact Authorized redirect URI:
+
+   ```text
+   http://localhost:53682/oauth2callback
+   ```
+
+6. Declare this least-privilege Drive scope in the consent configuration:
+
+   ```text
+   https://www.googleapis.com/auth/drive.file
+   ```
+
+7. Copy the OAuth Client ID and Client Secret into the local `.env.local` file (never into GitHub):
+
+   ```env
+   GOOGLE_CLIENT_ID=...
+   GOOGLE_CLIENT_SECRET=...
+   ```
+
+8. From the repository root, run:
+
+   ```bash
+   node --env-file=.env.local scripts/google-drive-auth.mjs
+   ```
+
+9. Open the Google authorization URL printed by the script, sign in with the intended Google account, and approve Drive file access. The script prints a refresh token in the terminal. Treat it as a password; do not paste it into chat, GitHub, screenshots, or public documentation.
+10. In Vercel → Project `skp-tracker-app` → Settings → Environment Variables, add these three **server-only** variables for Production, Preview, and Development:
+    - `GOOGLE_CLIENT_ID`
+    - `GOOGLE_CLIENT_SECRET`
+    - `GOOGLE_REFRESH_TOKEN`
+
+    Mark them Sensitive/Encrypted where the dashboard allows it. Do not prefix them with `NEXT_PUBLIC_`.
+11. Redeploy the latest commit so the new environment variables are available to the serverless function.
+
+The refresh token is issued for offline access. Google notes that OAuth projects left in External / Testing mode issue refresh tokens that expire after 7 days for Drive scopes. For an ongoing deployment, review the app's publishing status and complete any Google verification requirement that applies to the configured scopes.
+
+### Photo behavior
+
+- New activity first writes to Supabase with photo status `pending` when a photo was selected.
+- The server uploads the file and then updates the row to `uploaded` with Drive metadata.
+- If upload fails, the activity remains saved and its photo status becomes `failed`; the user can retry from the activity history.
+- File validation accepts JPEG, PNG, and WebP only, with a maximum size of 4 MB.
+- Existing activity rows can also receive a photo from the history section.
+- Photos are not synchronized from WhatsApp. The SKP app uses the web-only source decision.
+
 ## Initial data model
 
 Table: `public.skp_activities`
@@ -109,7 +166,11 @@ This is the proposed Stage 1 application schema, not a change to the existing Wh
 - [ ] User can save an activity with each of the six valid indicators.
 - [ ] Activity appears in history after save and page refresh.
 - [ ] A second user cannot read or modify the first user's rows (RLS test).
-- [ ] Monthly XLSX export downloads the selected month and contains the expected rows.\n- [ ] An empty month produces a valid XLSX workbook.\n- [ ] An unauthenticated export request is rejected.\n- [ ] No `.env.local` or secrets are committed.
+- [ ] Monthly XLSX export downloads the selected month and contains the expected rows.
+- [ ] Photo upload requires authentication and rejects non-image files or files over 4 MB.
+- [ ] Successful Drive upload records the Drive file ID, URL, and uploaded status.
+- [ ] Failed photo upload leaves the activity saved and can be retried.
+- [ ] Google Drive OAuth secrets are configured only in local environment/Vercel server-only variables.\n- [ ] An empty month produces a valid XLSX workbook.\n- [ ] An unauthenticated export request is rejected.\n- [ ] No `.env.local` or secrets are committed.
 
 ## Known limitations
 

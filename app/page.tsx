@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Camera, Download, ExternalLink, LogOut, Plus, RefreshCw, Upload } from "lucide-react";
+import { Camera, Download, ExternalLink, LogOut, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatDate, SKP_INDICATORS, SkpActivity, SkpIndicator, todayInMakassar } from "@/lib/skp";
 
@@ -25,6 +25,12 @@ export default function HomePage() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoInputKey, setPhotoInputKey] = useState(0);
   const [uploadingActivityId, setUploadingActivityId] = useState<string | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<SkpActivity | null>(null);
+  const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
+  const [deletedPhotoReminder, setDeletedPhotoReminder] = useState<{
+    aktivitas: string;
+    driveFileUrl: string | null;
+  } | null>(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -180,6 +186,53 @@ export default function HomePage() {
     await loadActivities();
   }
 
+  async function deleteActivity(item: SkpActivity) {
+    if (!supabase || !userId) {
+      setError("Sesi login tidak tersedia. Silakan login kembali.");
+      return;
+    }
+
+    setError("");
+    setMessage("");
+    setDeletingActivityId(item.id);
+
+    try {
+      const { data: deletedActivity, error: deleteError } = await supabase
+        .from("skp_activities")
+        .delete()
+        .eq("id", item.id)
+        .eq("user_id", userId)
+        .select("id")
+        .maybeSingle();
+
+      if (deleteError) {
+        throw new Error(deleteError.message);
+      }
+
+      if (!deletedActivity) {
+        throw new Error("Aktivitas tidak ditemukan atau tidak dapat dihapus. Muat ulang riwayat.");
+      }
+
+      setActivities(current => current.filter(activityItem => activityItem.id !== item.id));
+      setDeleteCandidate(null);
+
+      if (item.drive_file_url || item.photo_upload_status === "uploaded") {
+        setDeletedPhotoReminder({
+          aktivitas: item.aktivitas,
+          driveFileUrl: item.drive_file_url,
+        });
+      } else {
+        setDeletedPhotoReminder(null);
+      }
+
+      setMessage("Aktivitas berhasil dihapus dari SKP Tracker.");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Aktivitas gagal dihapus.");
+    } finally {
+      setDeletingActivityId(null);
+    }
+  }
+
   async function downloadMonthlyReport() {
     if (!supabase || !session) return;
 
@@ -288,6 +341,17 @@ export default function HomePage() {
           <div className="full actions"><button className="primary" type="submit" disabled={saving || uploadingActivityId !== null}><Plus size={16}/>{saving ? "Menyimpan aktivitas..." : uploadingActivityId ? "Mengunggah foto..." : "Simpan aktivitas"}</button></div>
         </form>
         {message && <p className="alert success">{message}</p>}
+        {deletedPhotoReminder && (
+          <div className="alert delete-reminder" role="status">
+            <strong>Pengingat bukti foto di Google Drive</strong>
+            <p>Catatan &quot;{deletedPhotoReminder.aktivitas}&quot; sudah dihapus dari aplikasi, tetapi foto di Drive tetap ada. Hapus foto tersebut secara manual dari folder <strong>SKP Activity Tracker</strong>.</p>
+            {deletedPhotoReminder.driveFileUrl && (
+              <a href={deletedPhotoReminder.driveFileUrl} target="_blank" rel="noreferrer">
+                Buka foto terkait di Google Drive <ExternalLink size={13}/>
+              </a>
+            )}
+          </div>
+        )}
         {error && <p className="alert error">{error}</p>}
       </section>
 
@@ -312,33 +376,74 @@ export default function HomePage() {
           <div className="activity-list">{activities.map(item=><article className="activity" key={item.id}>
             <div className="activity-meta"><span>{formatDate(item.tanggal)}</span><span className="status">{item.photo_upload_status === "uploaded" ? "Foto tersimpan" : item.photo_upload_status === "failed" ? "Upload foto gagal" : item.photo_upload_status === "pending" ? "Menunggu upload" : "Tanpa foto"}</span></div>
             <p>{item.aktivitas}</p><small>{item.indikator}</small>
-            <div className="activity-photo-actions">
-              {item.drive_file_url ? (
-                <a className="photo-link" href={item.drive_file_url} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Lihat foto di Google Drive</a>
-              ) : (
-                <label className={`photo-upload-trigger ${uploadingActivityId === item.id ? "disabled" : ""}`}>
-                  <input
-                    className="visually-hidden"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    disabled={uploadingActivityId !== null}
-                    onChange={e=>{
-                      const selectedFile=e.target.files?.[0] ?? null;
-                      e.target.value="";
-                      if(selectedFile) {
-                        void uploadPhotoForActivity(item.id, selectedFile).then(async uploadError=>{
-                          if(uploadError) setError(`Foto belum berhasil diunggah: ${uploadError}`);
-                          else setMessage("Foto berhasil diunggah ke Google Drive.");
-                          await loadActivities();
-                        });
-                      }
-                    }}
-                  />
-                  {uploadingActivityId === item.id ? <RefreshCw size={14}/> : <Upload size={14}/>}
-                  {uploadingActivityId === item.id ? "Mengunggah..." : item.photo_upload_status === "failed" ? "Coba unggah ulang" : "Unggah foto"}
-                </label>
-              )}
-            </div>
+            {deleteCandidate?.id === item.id ? (
+              <div className="delete-confirmation">
+                <div>
+                  <strong>Konfirmasi penghapusan</strong>
+                  <p>Aktivitas ini akan dihapus dari SKP Tracker. Foto bukti dukung di Google Drive tidak ikut terhapus otomatis.</p>
+                  {item.drive_file_url ? (
+                    <a className="photo-link" href={item.drive_file_url} target="_blank" rel="noreferrer">
+                      <ExternalLink size={14}/> Buka foto di Google Drive sebelum menghapus
+                    </a>
+                  ) : (
+                    <p className="delete-reminder-copy">Jika foto untuk aktivitas ini pernah diunggah, periksa folder <strong>SKP Activity Tracker</strong> dan hapus secara manual.</p>
+                  )}
+                </div>
+                <div className="delete-confirmation-actions">
+                  <button className="secondary" type="button" onClick={() => setDeleteCandidate(null)} disabled={deletingActivityId === item.id}>
+                    Batal
+                  </button>
+                  <button
+                    className="danger-button"
+                    type="button"
+                    onClick={() => void deleteActivity(item)}
+                    disabled={deletingActivityId !== null || uploadingActivityId !== null || saving}
+                  >
+                    <Trash2 size={14}/>{deletingActivityId === item.id ? "Menghapus..." : "Ya, hapus aktivitas"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="activity-photo-actions">
+                {item.drive_file_url ? (
+                  <a className="photo-link" href={item.drive_file_url} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Lihat foto di Google Drive</a>
+                ) : (
+                  <label className={`photo-upload-trigger ${uploadingActivityId === item.id ? "disabled" : ""}`}>
+                    <input
+                      className="visually-hidden"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      disabled={uploadingActivityId !== null || deletingActivityId !== null}
+                      onChange={e=>{
+                        const selectedFile=e.target.files?.[0] ?? null;
+                        e.target.value="";
+                        if(selectedFile) {
+                          void uploadPhotoForActivity(item.id, selectedFile).then(async uploadError=>{
+                            if(uploadError) setError(`Foto belum berhasil diunggah: ${uploadError}`);
+                            else setMessage("Foto berhasil diunggah ke Google Drive.");
+                            await loadActivities();
+                          });
+                        }
+                      }}
+                    />
+                    {uploadingActivityId === item.id ? <RefreshCw size={14}/> : <Upload size={14}/>}
+                    {uploadingActivityId === item.id ? "Mengunggah..." : item.photo_upload_status === "failed" ? "Coba unggah ulang" : "Unggah foto"}
+                  </label>
+                )}
+                <button
+                  className="danger-text-button"
+                  type="button"
+                  onClick={() => {
+                    setError("");
+                    setMessage("");
+                    setDeleteCandidate(item);
+                  }}
+                  disabled={uploadingActivityId !== null || deletingActivityId !== null || saving}
+                >
+                  <Trash2 size={14}/> Hapus aktivitas
+                </button>
+              </div>
+            )}
           </article>)}</div>}
       </section>
       <footer>SKP Activity Tracker · Zona waktu acuan: Asia/Makassar (WITA)</footer>

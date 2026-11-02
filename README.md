@@ -16,7 +16,7 @@ Not included yet:
 - AI extraction or n8n webhook integration.
 - WhatsApp-to-app synchronization. The current decision is web-only, so WhatsApp entries are not included in this app.
 - Google Drive upload and photo upload UI.
-- Edit/delete UI, analytics, exports, and deployment configuration.
+- Edit/delete UI, analytics, Google Drive/photo upload, and AI/n8n extraction.
 
 ## Architecture decisions
 
@@ -63,11 +63,20 @@ Not included yet:
 ## Security notes
 
 - Never put a Supabase `service_role` or secret API key in `NEXT_PUBLIC_*` variables or browser code.
-- The browser uses the project's publishable key only. Row Level Security restricts every row to its authenticated owner.
+- The browser uses the project's publishable key only. Row Level Security restricts every row to its authenticated owner. The XLSX endpoint requires the current user's access token and forwards it to Supabase; it does not use a service-role key.
 - The table grants Data API access to the `authenticated` role only; anonymous access is revoked.
 - Use a dedicated Supabase project and credentials for SKP.
 - Do not commit `.env.local`.
 - Do not put Google Drive or n8n credentials in this repository.
+
+## Monthly XLSX export
+
+- Select a month in the activity history section and choose **Download XLSX**.
+- The report filters `skp_activities.tanggal` using the selected calendar month.
+- Workbook columns: No., Tanggal, Aktivitas, Indikator SKP.
+- Filename: `riwayat-aktivitas-skp-YYYY-MM.xlsx`.
+- The endpoint uses the signed-in user's JWT and the existing Supabase RLS policies. No additional key or database migration is required.
+- Months with no records still produce a workbook with a clear empty-period message.
 
 ## Initial data model
 
@@ -100,7 +109,7 @@ This is the proposed Stage 1 application schema, not a change to the existing Wh
 - [ ] User can save an activity with each of the six valid indicators.
 - [ ] Activity appears in history after save and page refresh.
 - [ ] A second user cannot read or modify the first user's rows (RLS test).
-- [ ] No `.env.local` or secrets are committed.
+- [ ] Monthly XLSX export downloads the selected month and contains the expected rows.\n- [ ] An empty month produces a valid XLSX workbook.\n- [ ] An unauthenticated export request is rejected.\n- [ ] No `.env.local` or secrets are committed.
 
 ## Known limitations
 

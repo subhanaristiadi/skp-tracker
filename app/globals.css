@@ -9,3 +9,13 @@
 .month-picker{display:grid;gap:7px;max-width:260px;flex:1;font-size:13px;font-weight:600}
 .export-button{white-space:nowrap}
 @media(max-width:650px){.history-heading{align-items:flex-start}.history-actions{flex-shrink:0}.export-controls{align-items:stretch;flex-direction:column}.month-picker{max-width:none}.export-button{width:100%}}
+
+.field-hint{font-size:12px;font-weight:400;color:var(--muted);line-height:1.5}
+.selected-photo{display:flex;align-items:center;gap:8px;padding:10px 12px;background:#f3f6fc;border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--muted)}
+.selected-photo span{overflow-wrap:anywhere;flex:1}
+.text-button{background:transparent;color:var(--primary);padding:2px 4px;font-size:12px}
+.activity-photo-actions{display:flex;align-items:center;gap:12px;margin-top:12px}
+.photo-upload-trigger,.photo-link{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--primary);text-decoration:none;padding:7px 10px;border:1px solid #dbe4f5;border-radius:8px;background:#f7f9ff;cursor:pointer}
+.photo-upload-trigger:hover,.photo-link:hover{background:#edf3ff}
+.photo-upload-trigger.disabled{opacity:.55;pointer-events:none}
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}

@@ -216,7 +216,7 @@ export default function HomePage() {
       setActivities(current => current.filter(activityItem => activityItem.id !== item.id));
       setDeleteCandidate(null);
 
-      if (item.photo_upload_status !== "not_required") {
+      if (item.drive_file_url || item.photo_upload_status === "uploaded") {
         setDeletedPhotoReminder({
           aktivitas: item.aktivitas,
           driveFileUrl: item.drive_file_url,

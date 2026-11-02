@@ -31,20 +31,29 @@ alter table public.skp_activities enable row level security;
 drop policy if exists "Users can read their own SKP activities" on public.skp_activities;
 create policy "Users can read their own SKP activities"
   on public.skp_activities for select
-  using (auth.uid() = user_id);
+  to authenticated
+  using ((select auth.uid()) = user_id);
 
 drop policy if exists "Users can insert their own SKP activities" on public.skp_activities;
 create policy "Users can insert their own SKP activities"
   on public.skp_activities for insert
-  with check (auth.uid() = user_id);
+  to authenticated
+  with check ((select auth.uid()) = user_id);
 
 drop policy if exists "Users can update their own SKP activities" on public.skp_activities;
 create policy "Users can update their own SKP activities"
   on public.skp_activities for update
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 drop policy if exists "Users can delete their own SKP activities" on public.skp_activities;
 create policy "Users can delete their own SKP activities"
   on public.skp_activities for delete
-  using (auth.uid() = user_id);
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+-- Explicit Data API grants: authenticated users only.
+grant usage on schema public to authenticated;
+revoke all on table public.skp_activities from anon, public;
+grant select, insert, update, delete on table public.skp_activities to authenticated;

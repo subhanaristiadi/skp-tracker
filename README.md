@@ -15,8 +15,8 @@ Included:
 Not included yet:
 - AI extraction or n8n webhook integration.
 - WhatsApp-to-app synchronization. The current decision is web-only, so WhatsApp entries are not included in this app.
-- Optional photo upload to a private Google Drive folder, performed after the SKP activity has been saved.
-- Edit/delete UI, analytics, Google Drive/photo upload, and AI/n8n extraction.
+- Google Drive photo upload is optional and performed after the SKP activity has been saved.
+- Edit/delete UI, analytics, and AI/n8n extraction.
 
 ## Architecture decisions
 
@@ -24,7 +24,7 @@ Not included yet:
 - Database: dedicated Supabase project `skp-tracker` (`tnksnsslohnvrscdbktx`); do not reuse Finance Tracker tables or credentials.
 - Source: web only in this stage.
 - Indicator: user-selected; no AI classification.
-- Photo: planned flow saves the activity first, then uploads an optional photo to Google Drive.
+- Photo: the app saves the activity first, then uploads an optional photo to a private Google Drive folder.
 - Existing WhatsApp n8n workflow remains unchanged.
 
 ## Requirements
@@ -153,7 +153,7 @@ Table: `public.skp_activities`
 | created_at | timestamptz | Creation timestamp |
 | updated_at | timestamptz | Reserved for future update flow |
 
-This is the proposed Stage 1 application schema, not a change to the existing WhatsApp workflow or Google Sheets schema.
+This is the SKP Activity Tracker application schema, separate from the existing WhatsApp workflow and Google Sheets schema.
 
 ## Verification checklist
 
@@ -175,5 +175,5 @@ This is the proposed Stage 1 application schema, not a change to the existing Wh
 ## Known limitations
 
 - The current implementation provides client-side Supabase authentication and relies on Supabase RLS for row isolation. Add server-side session handling before introducing privileged server features.
-- The UI currently supports create/read only. Update/delete and photo retry are future work.
-- The migration does not create a Supabase Storage bucket or Google Drive connection.
+- The UI supports create/read and optional photo upload/retry. Update/delete and analytics are future work.
+- Google Drive upload requires the one-time OAuth configuration described above; no n8n integration is used.

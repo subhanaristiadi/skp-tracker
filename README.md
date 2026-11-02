@@ -29,7 +29,7 @@ Not included yet:
 
 ## Requirements
 
-- Node.js 20.9+ recommended for Next.js 15.
+- Node.js 22 or later. Supabase JS no longer supports Node.js 20.
 - npm.
 - A dedicated Supabase project.
 

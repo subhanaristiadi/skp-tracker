@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Download, LogOut, Plus, RefreshCw } from "lucide-react";
+import { Camera, Download, ExternalLink, LogOut, Plus, RefreshCw, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatDate, SKP_INDICATORS, SkpActivity, SkpIndicator, todayInMakassar } from "@/lib/skp";
 
@@ -22,6 +22,9 @@ export default function HomePage() {
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
   const [exportError, setExportError] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoInputKey, setPhotoInputKey] = useState(0);
+  const [uploadingActivityId, setUploadingActivityId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -76,6 +79,46 @@ export default function HomePage() {
     if (authError) setError(authError.message);
   }
 
+  const uploadPhotoForActivity = useCallback(async (activityId: string, file: File): Promise<string | null> => {
+    if (!supabase) return "Konfigurasi Supabase belum tersedia.";
+    if (file.size <= 0 || file.size > 4 * 1024 * 1024) return "Ukuran foto maksimal 4 MB.";
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      return "Format foto harus JPG, PNG, atau WebP.";
+    }
+
+    setUploadingActivityId(activityId);
+
+    try {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+
+      if (sessionError || !accessToken) {
+        throw new Error("Sesi login tidak tersedia. Silakan login kembali.");
+      }
+
+      const formData = new FormData();
+      formData.append("activityId", activityId);
+      formData.append("photo", file);
+
+      const response = await fetch("/api/activities/photo", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: formData,
+      });
+
+      const result = await response.json().catch(() => null) as { error?: string; success?: boolean } | null;
+      if (!response.ok) {
+        throw new Error(result?.error || "Foto gagal diunggah.");
+      }
+
+      return null;
+    } catch (uploadError) {
+      return uploadError instanceof Error ? uploadError.message : "Terjadi kesalahan saat mengunggah foto.";
+    } finally {
+      setUploadingActivityId(null);
+    }
+  }, []);
+
   async function saveActivity(event: FormEvent) {
     event.preventDefault();
     setError("");
@@ -87,26 +130,53 @@ export default function HomePage() {
       return;
     }
 
+    const selectedPhoto = photo;
+    if (selectedPhoto && selectedPhoto.size > 4 * 1024 * 1024) {
+      setError("Ukuran foto maksimal 4 MB.");
+      return;
+    }
+    if (selectedPhoto && !["image/jpeg", "image/png", "image/webp"].includes(selectedPhoto.type)) {
+      setError("Format foto harus JPG, PNG, atau WebP.");
+      return;
+    }
+
     setSaving(true);
-    const { error: insertError } = await supabase.from("skp_activities").insert({
-      user_id: userId,
-      tanggal: date || todayInMakassar(),
-      aktivitas: activity.trim(),
-      indikator: indicator,
-      source: "web",
-      photo_upload_status: "not_required",
-    });
+    const { data: insertedActivity, error: insertError } = await supabase
+      .from("skp_activities")
+      .insert({
+        user_id: userId,
+        tanggal: date || todayInMakassar(),
+        aktivitas: activity.trim(),
+        indikator: indicator,
+        source: "web",
+        photo_upload_status: selectedPhoto ? "pending" : "not_required",
+      })
+      .select("id")
+      .single();
     setSaving(false);
 
-    if (insertError) {
-      setError(insertError.message);
+    if (insertError || !insertedActivity) {
+      setError(insertError?.message || "Aktivitas gagal disimpan.");
       return;
     }
 
     setActivity("");
     setDate(todayInMakassar());
     setIndicator("");
+    setPhoto(null);
+    setPhotoInputKey(current => current + 1);
     setMessage("Aktivitas berhasil disimpan.");
+
+    if (selectedPhoto) {
+      setMessage("Aktivitas tersimpan. Foto sedang diunggah ke Google Drive...");
+      const uploadError = await uploadPhotoForActivity(insertedActivity.id, selectedPhoto);
+      if (uploadError) {
+        setError(`Aktivitas tetap tersimpan, tetapi foto belum berhasil diunggah: ${uploadError}`);
+      } else {
+        setMessage("Aktivitas dan foto berhasil disimpan ke Google Drive.");
+      }
+    }
+
     await loadActivities();
   }
 
@@ -205,8 +275,17 @@ export default function HomePage() {
               {SKP_INDICATORS.map((item, index)=><option key={item} value={item}>{index+1}. {item}</option>)}
             </select>
           </label>
-          <div className="full upload-note">Foto bersifat opsional dan belum diaktifkan pada tahap pertama. Integrasi Google Drive dikerjakan pada tahap berikutnya.</div>
-          <div className="full actions"><button className="primary" type="submit" disabled={saving}><Plus size={16}/>{saving ? "Menyimpan..." : "Simpan aktivitas"}</button></div>
+          <label className="full">Foto bukti dukung (opsional)
+            <input
+              key={photoInputKey}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={e=>setPhoto(e.target.files?.[0] ?? null)}
+            />
+            <span className="field-hint">JPG, PNG, atau WebP · Maksimal 4 MB. Foto diunggah ke folder Google Drive setelah aktivitas tersimpan.</span>
+          </label>
+          {photo && <div className="full selected-photo"><Camera size={15}/><span>{photo.name}</span><button type="button" className="text-button" onClick={()=>setPhoto(null)}>Hapus</button></div>}
+          <div className="full actions"><button className="primary" type="submit" disabled={saving || uploadingActivityId !== null}><Plus size={16}/>{saving ? "Menyimpan aktivitas..." : uploadingActivityId ? "Mengunggah foto..." : "Simpan aktivitas"}</button></div>
         </form>
         {message && <p className="alert success">{message}</p>}
         {error && <p className="alert error">{error}</p>}
@@ -231,8 +310,35 @@ export default function HomePage() {
         {exportError && <p className="alert error" role="alert">{exportError}</p>}
         {activities.length === 0 ? <div className="empty">Belum ada aktivitas. Tambahkan catatan pertama melalui formulir di atas.</div> :
           <div className="activity-list">{activities.map(item=><article className="activity" key={item.id}>
-            <div className="activity-meta"><span>{formatDate(item.tanggal)}</span><span className="status">{item.photo_upload_status === "uploaded" ? "Foto tersimpan" : item.photo_upload_status === "failed" ? "Upload foto gagal" : "Tanpa foto"}</span></div>
+            <div className="activity-meta"><span>{formatDate(item.tanggal)}</span><span className="status">{item.photo_upload_status === "uploaded" ? "Foto tersimpan" : item.photo_upload_status === "failed" ? "Upload foto gagal" : item.photo_upload_status === "pending" ? "Menunggu upload" : "Tanpa foto"}</span></div>
             <p>{item.aktivitas}</p><small>{item.indikator}</small>
+            <div className="activity-photo-actions">
+              {item.drive_file_url ? (
+                <a className="photo-link" href={item.drive_file_url} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Lihat foto di Google Drive</a>
+              ) : (
+                <label className={`photo-upload-trigger ${uploadingActivityId === item.id ? "disabled" : ""}`}>
+                  <input
+                    className="visually-hidden"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={uploadingActivityId !== null}
+                    onChange={e=>{
+                      const selectedFile=e.target.files?.[0] ?? null;
+                      e.target.value="";
+                      if(selectedFile) {
+                        void uploadPhotoForActivity(item.id, selectedFile).then(async uploadError=>{
+                          if(uploadError) setError(`Foto belum berhasil diunggah: ${uploadError}`);
+                          else setMessage("Foto berhasil diunggah ke Google Drive.");
+                          await loadActivities();
+                        });
+                      }
+                    }}
+                  />
+                  {uploadingActivityId === item.id ? <RefreshCw size={14}/> : <Upload size={14}/>}
+                  {uploadingActivityId === item.id ? "Mengunggah..." : item.photo_upload_status === "failed" ? "Coba unggah ulang" : "Unggah foto"}
+                </label>
+              )}
+            </div>
           </article>)}</div>}
       </section>
       <footer>SKP Activity Tracker · Zona waktu acuan: Asia/Makassar (WITA)</footer>

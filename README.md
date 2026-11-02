@@ -83,7 +83,7 @@ Not included yet:
 - The owner can delete an activity from the history list. The browser asks for confirmation before removing the Supabase row.
 - The delete query is scoped to the signed-in user's ID and is also protected by the existing `authenticated` DELETE RLS policy. No service-role key or schema migration is required.
 - Deleting an activity does **not** delete its Google Drive photo. The confirmation panel warns about this and provides the stored Drive file link when available.
-- After deletion, the app displays a reminder to manually delete the corresponding photo from the private `SKP Activity Tracker` Drive folder. This is intentionally a manual step; the app does not send a Drive delete request.
+- After deletion, when the activity has a successful Drive upload, the app displays a reminder to manually delete the photo from the private `SKP Activity Tracker` folder and provides its stored Drive link when available. This is intentionally a manual step; the app does not send a Drive delete request.
 
 ## Google Drive photo upload
 

@@ -23,6 +23,7 @@ export default function HomePage() {
   const [exportMessage, setExportMessage] = useState("");
   const [exportError, setExportError] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
+  const [photoInputKey, setPhotoInputKey] = useState(0);
   const [uploadingActivityId, setUploadingActivityId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -163,6 +164,7 @@ export default function HomePage() {
     setDate(todayInMakassar());
     setIndicator("");
     setPhoto(null);
+    setPhotoInputKey(current => current + 1);
     setMessage("Aktivitas berhasil disimpan.");
 
     if (selectedPhoto) {
@@ -275,6 +277,7 @@ export default function HomePage() {
           </label>
           <label className="full">Foto bukti dukung (opsional)
             <input
+              key={photoInputKey}
               type="file"
               accept="image/jpeg,image/png,image/webp"
               onChange={e=>setPhoto(e.target.files?.[0] ?? null)}

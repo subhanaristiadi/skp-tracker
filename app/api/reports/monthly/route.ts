@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const month = searchParams.get("month") ?? "";
-    const match = /^(\\d{4})-(0[1-9]|1[0-2])$/.exec(month);
+    const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(month);
 
     if (!match) {
       return Response.json({ error: "Format bulan tidak valid. Gunakan YYYY-MM." }, { status: 400 });

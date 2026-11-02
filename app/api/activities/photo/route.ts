@@ -76,12 +76,12 @@ async function driveApiRequest(
   accessToken: string,
   init: RequestInit = {}
 ): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${accessToken}`);
+
   return fetch(url, {
     ...init,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      ...init.headers,
-    },
+    headers,
     cache: "no-store",
   });
 }

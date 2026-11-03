@@ -2,9 +2,9 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Camera, Download, ExternalLink, LogOut, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
+import { Download, ExternalLink, LogOut, Paperclip, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { formatDate, SKP_INDICATORS, SkpActivity, SkpIndicator, todayInMakassar } from "@/lib/skp";
+import { EVIDENCE_ACCEPT, formatDate, SKP_INDICATORS, SkpActivity, SkpIndicator, todayInMakassar, validateEvidenceFile } from "@/lib/skp";
 
 export default function HomePage() {
   const [session, setSession] = useState<Session | null>(null);
@@ -22,12 +22,12 @@ export default function HomePage() {
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
   const [exportError, setExportError] = useState("");
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [photoInputKey, setPhotoInputKey] = useState(0);
+  const [evidence, setEvidence] = useState<File | null>(null);
+  const [evidenceInputKey, setEvidenceInputKey] = useState(0);
   const [uploadingActivityId, setUploadingActivityId] = useState<string | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<SkpActivity | null>(null);
   const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
-  const [deletedPhotoReminder, setDeletedPhotoReminder] = useState<{
+  const [deletedEvidenceReminder, setDeletedEvidenceReminder] = useState<{
     aktivitas: string;
     driveFileUrl: string | null;
   } | null>(null);
@@ -85,12 +85,10 @@ export default function HomePage() {
     if (authError) setError(authError.message);
   }
 
-  const uploadPhotoForActivity = useCallback(async (activityId: string, file: File): Promise<string | null> => {
+  const uploadEvidenceForActivity = useCallback(async (activityId: string, file: File): Promise<string | null> => {
     if (!supabase) return "Konfigurasi Supabase belum tersedia.";
-    if (file.size <= 0 || file.size > 4 * 1024 * 1024) return "Ukuran foto maksimal 4 MB.";
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      return "Format foto harus JPG, PNG, atau WebP.";
-    }
+    const validationError = validateEvidenceFile(file);
+    if (validationError) return validationError;
 
     setUploadingActivityId(activityId);
 
@@ -104,7 +102,7 @@ export default function HomePage() {
 
       const formData = new FormData();
       formData.append("activityId", activityId);
-      formData.append("photo", file);
+      formData.append("evidence", file);
 
       const response = await fetch("/api/activities/photo", {
         method: "POST",
@@ -114,12 +112,12 @@ export default function HomePage() {
 
       const result = await response.json().catch(() => null) as { error?: string; success?: boolean } | null;
       if (!response.ok) {
-        throw new Error(result?.error || "Foto gagal diunggah.");
+        throw new Error(result?.error || "File bukti gagal diunggah.");
       }
 
       return null;
     } catch (uploadError) {
-      return uploadError instanceof Error ? uploadError.message : "Terjadi kesalahan saat mengunggah foto.";
+      return uploadError instanceof Error ? uploadError.message : "Terjadi kesalahan saat mengunggah bukti.";
     } finally {
       setUploadingActivityId(null);
     }
@@ -136,14 +134,13 @@ export default function HomePage() {
       return;
     }
 
-    const selectedPhoto = photo;
-    if (selectedPhoto && selectedPhoto.size > 4 * 1024 * 1024) {
-      setError("Ukuran foto maksimal 4 MB.");
-      return;
-    }
-    if (selectedPhoto && !["image/jpeg", "image/png", "image/webp"].includes(selectedPhoto.type)) {
-      setError("Format foto harus JPG, PNG, atau WebP.");
-      return;
+    const selectedEvidence = evidence;
+    if (selectedEvidence) {
+      const validationError = validateEvidenceFile(selectedEvidence);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
     }
 
     setSaving(true);
@@ -155,7 +152,7 @@ export default function HomePage() {
         aktivitas: activity.trim(),
         indikator: indicator,
         source: "web",
-        photo_upload_status: selectedPhoto ? "pending" : "not_required",
+        photo_upload_status: selectedEvidence ? "pending" : "not_required",
       })
       .select("id")
       .single();
@@ -169,17 +166,17 @@ export default function HomePage() {
     setActivity("");
     setDate(todayInMakassar());
     setIndicator("");
-    setPhoto(null);
-    setPhotoInputKey(current => current + 1);
+    setEvidence(null);
+    setEvidenceInputKey(current => current + 1);
     setMessage("Aktivitas berhasil disimpan.");
 
-    if (selectedPhoto) {
-      setMessage("Aktivitas tersimpan. Foto sedang diunggah ke Google Drive...");
-      const uploadError = await uploadPhotoForActivity(insertedActivity.id, selectedPhoto);
+    if (selectedEvidence) {
+      setMessage("Aktivitas tersimpan. Bukti sedang diunggah ke Google Drive...");
+      const uploadError = await uploadEvidenceForActivity(insertedActivity.id, selectedEvidence);
       if (uploadError) {
-        setError(`Aktivitas tetap tersimpan, tetapi foto belum berhasil diunggah: ${uploadError}`);
+        setError(`Aktivitas tetap tersimpan, tetapi bukti belum berhasil diunggah: ${uploadError}`);
       } else {
-        setMessage("Aktivitas dan foto berhasil disimpan ke Google Drive.");
+        setMessage("Aktivitas dan bukti berhasil disimpan ke Google Drive.");
       }
     }
 
@@ -217,12 +214,12 @@ export default function HomePage() {
       setDeleteCandidate(null);
 
       if (item.drive_file_url || item.photo_upload_status === "uploaded") {
-        setDeletedPhotoReminder({
+        setDeletedEvidenceReminder({
           aktivitas: item.aktivitas,
           driveFileUrl: item.drive_file_url,
         });
       } else {
-        setDeletedPhotoReminder(null);
+        setDeletedEvidenceReminder(null);
       }
 
       setMessage("Aktivitas berhasil dihapus dari SKP Tracker.");
@@ -328,26 +325,26 @@ export default function HomePage() {
               {SKP_INDICATORS.map((item, index)=><option key={item} value={item}>{index+1}. {item}</option>)}
             </select>
           </label>
-          <label className="full">Foto bukti dukung (opsional)
+          <label className="full">Bukti pendukung (opsional)
             <input
-              key={photoInputKey}
+              key={evidenceInputKey}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={e=>setPhoto(e.target.files?.[0] ?? null)}
+              accept={EVIDENCE_ACCEPT}
+              onChange={e=>setEvidence(e.target.files?.[0] ?? null)}
             />
-            <span className="field-hint">JPG, PNG, atau WebP · Maksimal 4 MB. Foto diunggah ke folder Google Drive setelah aktivitas tersimpan.</span>
+            <span className="field-hint">Gambar (JPG, PNG, WebP), PDF, Word (DOC/DOCX), Excel (XLS/XLSX), atau PowerPoint (PPT/PPTX) · Maksimal 4 MB. File diunggah ke folder Google Drive setelah aktivitas tersimpan.</span>
           </label>
-          {photo && <div className="full selected-photo"><Camera size={15}/><span>{photo.name}</span><button type="button" className="text-button" onClick={()=>setPhoto(null)}>Hapus</button></div>}
-          <div className="full actions"><button className="primary" type="submit" disabled={saving || uploadingActivityId !== null}><Plus size={16}/>{saving ? "Menyimpan aktivitas..." : uploadingActivityId ? "Mengunggah foto..." : "Simpan aktivitas"}</button></div>
+          {photo && <div className="full selected-evidence"><Paperclip size={15}/><span>{photo.name}</span><button type="button" className="text-button" onClick={()=>setEvidence(null)}>Hapus</button></div>}
+          <div className="full actions"><button className="primary" type="submit" disabled={saving || uploadingActivityId !== null}><Plus size={16}/>{saving ? "Menyimpan aktivitas..." : uploadingActivityId ? "Mengunggah bukti..." : "Simpan aktivitas"}</button></div>
         </form>
         {message && <p className="alert success">{message}</p>}
-        {deletedPhotoReminder && (
+        {deletedEvidenceReminder && (
           <div className="alert delete-reminder" role="status">
-            <strong>Pengingat bukti foto di Google Drive</strong>
-            <p>Catatan &quot;{deletedPhotoReminder.aktivitas}&quot; sudah dihapus dari aplikasi, tetapi foto di Drive tetap ada. Hapus foto tersebut secara manual dari folder <strong>SKP Activity Tracker</strong>.</p>
-            {deletedPhotoReminder.driveFileUrl && (
-              <a href={deletedPhotoReminder.driveFileUrl} target="_blank" rel="noreferrer">
-                Buka foto terkait di Google Drive <ExternalLink size={13}/>
+            <strong>Pengingat file bukti di Google Drive</strong>
+            <p>Catatan &quot;{deletedEvidenceReminder.aktivitas}&quot; sudah dihapus dari aplikasi, tetapi file bukti di Drive tetap ada. Hapus file tersebut secara manual dari folder <strong>SKP Activity Tracker</strong>.</p>
+            {deletedEvidenceReminder.driveFileUrl && (
+              <a href={deletedEvidenceReminder.driveFileUrl} target="_blank" rel="noreferrer">
+                Buka file bukti terkait di Google Drive <ExternalLink size={13}/>
               </a>
             )}
           </div>
@@ -374,19 +371,19 @@ export default function HomePage() {
         {exportError && <p className="alert error" role="alert">{exportError}</p>}
         {activities.length === 0 ? <div className="empty">Belum ada aktivitas. Tambahkan catatan pertama melalui formulir di atas.</div> :
           <div className="activity-list">{activities.map(item=><article className="activity" key={item.id}>
-            <div className="activity-meta"><span>{formatDate(item.tanggal)}</span><span className="status">{item.photo_upload_status === "uploaded" ? "Foto tersimpan" : item.photo_upload_status === "failed" ? "Upload foto gagal" : item.photo_upload_status === "pending" ? "Menunggu upload" : "Tanpa foto"}</span></div>
+            <div className="activity-meta"><span>{formatDate(item.tanggal)}</span><span className="status">{item.photo_upload_status === "uploaded" ? "Bukti tersimpan" : item.photo_upload_status === "failed" ? "Upload bukti gagal" : item.photo_upload_status === "pending" ? "Menunggu upload" : "Tanpa bukti"}</span></div>
             <p>{item.aktivitas}</p><small>{item.indikator}</small>
             {deleteCandidate?.id === item.id ? (
               <div className="delete-confirmation">
                 <div>
                   <strong>Konfirmasi penghapusan</strong>
-                  <p>Aktivitas ini akan dihapus dari SKP Tracker. Foto bukti dukung di Google Drive tidak ikut terhapus otomatis.</p>
+                  <p>Aktivitas ini akan dihapus dari SKP Tracker. File bukti dukung di Google Drive tidak ikut terhapus otomatis.</p>
                   {item.drive_file_url ? (
-                    <a className="photo-link" href={item.drive_file_url} target="_blank" rel="noreferrer">
+                    <a className="evidence-link" href={item.drive_file_url} target="_blank" rel="noreferrer">
                       <ExternalLink size={14}/> Buka foto di Google Drive sebelum menghapus
                     </a>
                   ) : (
-                    <p className="delete-reminder-copy">Jika foto untuk aktivitas ini pernah diunggah, periksa folder <strong>SKP Activity Tracker</strong> dan hapus secara manual.</p>
+                    <p className="delete-reminder-copy">Jika file bukti untuk aktivitas ini pernah diunggah, periksa folder <strong>SKP Activity Tracker</strong> dan hapus secara manual.</p>
                   )}
                 </div>
                 <div className="delete-confirmation-actions">
@@ -404,23 +401,23 @@ export default function HomePage() {
                 </div>
               </div>
             ) : (
-              <div className="activity-photo-actions">
+              <div className="activity-evidence-actions">
                 {item.drive_file_url ? (
-                  <a className="photo-link" href={item.drive_file_url} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Lihat foto di Google Drive</a>
+                  <a className="evidence-link" href={item.drive_file_url} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Lihat bukti di Google Drive</a>
                 ) : (
-                  <label className={`photo-upload-trigger ${uploadingActivityId === item.id ? "disabled" : ""}`}>
+                  <label className={`evidence-upload-trigger ${uploadingActivityId === item.id ? "disabled" : ""}`}>
                     <input
                       className="visually-hidden"
                       type="file"
-                      accept="image/jpeg,image/png,image/webp"
+                      accept={EVIDENCE_ACCEPT}
                       disabled={uploadingActivityId !== null || deletingActivityId !== null}
                       onChange={e=>{
                         const selectedFile=e.target.files?.[0] ?? null;
                         e.target.value="";
                         if(selectedFile) {
-                          void uploadPhotoForActivity(item.id, selectedFile).then(async uploadError=>{
-                            if(uploadError) setError(`Foto belum berhasil diunggah: ${uploadError}`);
-                            else setMessage("Foto berhasil diunggah ke Google Drive.");
+                          void uploadEvidenceForActivity(item.id, selectedFile).then(async uploadError=>{
+                            if(uploadError) setError(`Bukti belum berhasil diunggah: ${uploadError}`);
+                            else setMessage("Bukti berhasil diunggah ke Google Drive.");
                             await loadActivities();
                           });
                         }

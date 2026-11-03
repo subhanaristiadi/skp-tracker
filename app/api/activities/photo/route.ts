@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { MAX_EVIDENCE_FILE_SIZE } from "@/lib/skp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const FOLDER_NAME = "SKP Activity Tracker";
 const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
 
@@ -243,7 +243,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "File bukti tidak ditemukan." }, { status: 400 });
     }
 
-    if (evidence.size <= 0 || evidence.size > MAX_FILE_SIZE) {
+    if (evidence.size <= 0 || evidence.size > MAX_EVIDENCE_FILE_SIZE) {
       await markFailed();
       return Response.json({ error: "Ukuran file bukti harus lebih dari 0 dan maksimal 4 MB." }, { status: 413 });
     }

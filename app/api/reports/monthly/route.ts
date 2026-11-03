@@ -111,7 +111,7 @@ export async function GET(request: Request) {
       { key: "tanggal", width: 16 },
       { key: "aktivitas", width: 58 },
       { key: "indikator", width: 78 },
-      { key: "buktiFoto", width: 16 },
+      { key: "bukti", width: 16 },
     ];
 
     worksheet.mergeCells("A1:E1");
@@ -131,7 +131,7 @@ export async function GET(request: Request) {
     worksheet.getRow(3).height = 20;
 
     worksheet.addRow([]);
-    const headerRow = worksheet.addRow(["No.", "Tanggal", "Aktivitas", "Indikator SKP", "Bukti Foto"]);
+    const headerRow = worksheet.addRow(["No.", "Tanggal", "Aktivitas", "Indikator SKP", "Bukti"]);
     headerRow.height = 26;
     headerRow.eachCell((cell) => {
       cell.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };

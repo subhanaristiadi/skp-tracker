@@ -15,7 +15,6 @@ Included:
 Not included yet:
 - AI extraction or n8n webhook integration.
 - WhatsApp-to-app synchronization. The current decision is web-only, so WhatsApp entries are not included in this app.
-- Google Drive photo upload is optional and performed after the SKP activity has been saved.
 - Edit UI, analytics, and AI/n8n extraction.
 
 ## Architecture decisions
@@ -24,7 +23,7 @@ Not included yet:
 - Database: dedicated Supabase project `skp-tracker` (`tnksnsslohnvrscdbktx`); do not reuse Finance Tracker tables or credentials.
 - Source: web only in this stage.
 - Indicator: user-selected; no AI classification.
-- Photo: the app saves the activity first, then uploads an optional photo to a private Google Drive folder.
+- Evidence: the app saves the activity first, then uploads an optional image or document to a private Google Drive folder.
 - Existing WhatsApp n8n workflow remains unchanged.
 
 ## Requirements
@@ -90,34 +89,34 @@ The activity history can be exported as an Excel workbook from the **Riwayat Akt
 | Tanggal | Activity date, formatted as `DD-MM-YYYY`. |
 | Aktivitas | Activity description saved in SKP Tracker. |
 | Indikator SKP | The official SKP indicator selected when the activity was recorded. |
-| Bukti Foto | Indicates whether the activity's photo upload to Google Drive has completed successfully. |
+| Bukti | Indicates whether an evidence file (image or document) has been uploaded successfully to Google Drive. |
 
-### Bukti Foto status rule
+### Bukti status rule
 
-The **Bukti Foto** value is derived from `skp_activities.photo_upload_status`, not merely from whether a photo was selected on the form.
+The **Bukti** value is derived from the existing `skp_activities.photo_upload_status` column (a legacy name retained for compatibility), not merely from whether an evidence file was selected on the form.
 
 | `photo_upload_status` | Value in XLSX | Meaning |
 |---|---|---|
-| `uploaded` | **Sudah** | The photo upload to Google Drive completed and the activity row was updated successfully. |
-| `not_required` | **Belum** | No photo was required or attached to the activity. |
-| `pending` | **Belum** | A photo upload is pending or has not completed. |
-| `failed` | **Belum** | The photo upload failed and can be retried from the activity history. |
+| `uploaded` | **Sudah** | The evidence file upload to Google Drive completed and the activity row was updated successfully. |
+| `not_required` | **Belum** | No evidence file was selected for the activity. |
+| `pending` | **Belum** | An evidence file upload is pending or has not completed. |
+| `failed` | **Belum** | The evidence file upload failed and can be retried from the activity history. |
 
-Only `uploaded` is reported as **Sudah**. All other supported states are reported as **Belum**. Therefore, an activity with a selected photo is not marked **Sudah** until the upload status has been saved as `uploaded`.
+Only `uploaded` is reported as **Sudah**. All other supported states are reported as **Belum**. An activity is not marked **Sudah** until its evidence file has been uploaded and the status has been saved as `uploaded`.
 
 
 ## Deleting an activity
 
 - The owner can delete an activity from the history list. The browser asks for confirmation before removing the Supabase row.
 - The delete query is scoped to the signed-in user's ID and is also protected by the existing `authenticated` DELETE RLS policy. No service-role key or schema migration is required.
-- Deleting an activity does **not** delete its Google Drive photo. The confirmation panel warns about this and provides the stored Drive file link when available.
-- After deletion, when the activity has a successful Drive upload, the app displays a reminder to manually delete the photo from the private `SKP Activity Tracker` folder and provides its stored Drive link when available. This is intentionally a manual step; the app does not send a Drive delete request.
+- Deleting an activity does **not** delete its Google Drive evidence file. The confirmation panel warns about this and provides the stored Drive file link when available.
+- After deletion, when the activity has a successful Drive upload, the app displays a reminder to manually delete the evidence file from the private `SKP Activity Tracker` folder and provides its stored Drive link when available. This is intentionally a manual step; the app does not send a Drive delete request.
 
-## Google Drive photo upload
+## Google Drive evidence upload
 
-Photo upload is optional and happens after the SKP activity row has been saved. The app uploads JPG, PNG, or WebP images up to 4 MB to a folder named `SKP Activity Tracker` in the authorized Google Drive. The folder and uploaded files remain private; the app does not create public sharing permissions. Drive filenames use the activity date and a sanitized version of the activity description (for example, `2026-11-02 - Menyusun lesson plan Google Sheets.png`); long descriptions are shortened to keep filenames manageable.
+Evidence upload is optional and happens after the SKP activity row has been saved. The app accepts image files (JPG/JPEG, PNG, WebP) and documents (PDF, Word DOC/DOCX, Excel XLS/XLSX, PowerPoint PPT/PPTX), up to 4 MB per file. The server validates the file extension against its actual signature or container before upload; it does not rely only on the browser-provided MIME type. Files are uploaded to a folder named `SKP Activity Tracker` in the authorized Google Drive. The folder and uploaded files remain private; the app does not create public sharing permissions. Drive filenames use the activity date and a sanitized version of the activity description (for example, `2026-11-02 - Menyusun lesson plan Google Sheets.pdf`); long descriptions are shortened to keep filenames manageable.
 
-The server endpoint is `POST /api/activities/photo`. It requires the signed-in Supabase user's JWT, verifies that the activity belongs to that user through RLS, validates the actual image signature and size, uploads the image with the Google Drive API, and then stores `drive_file_id`, `drive_file_url`, and `photo_upload_status` in `public.skp_activities`. No n8n workflow is involved and no Supabase service-role key is used.
+The server endpoint is `POST /api/activities/photo` (the existing route is retained for compatibility). It accepts the `evidence` form field and also accepts the legacy `photo` form field. It requires the signed-in Supabase user's JWT, verifies activity ownership through RLS, validates the actual file signature/container and size, uploads the evidence file with the Google Drive API, then stores `drive_file_id`, `drive_file_url`, and the existing `photo_upload_status` in `public.skp_activities`. The database column name is retained to avoid a migration and preserve existing activity records. No n8n workflow is involved and no Supabase service-role key is used.
 
 ### One-time Google Cloud setup
 
@@ -161,14 +160,14 @@ The server endpoint is `POST /api/activities/photo`. It requires the signed-in S
 
 The refresh token is issued for offline access. Google notes that OAuth projects left in External / Testing mode issue refresh tokens that expire after 7 days for Drive scopes. For an ongoing deployment, review the app's publishing status and complete any Google verification requirement that applies to the configured scopes.
 
-### Photo behavior
+### Evidence behavior
 
-- New activity first writes to Supabase with photo status `pending` when a photo was selected.
+- New activity first writes to Supabase with the existing `photo_upload_status` set to `pending` when an evidence file was selected.
 - The server uploads the file and then updates the row to `uploaded` with Drive metadata.
-- If upload fails, the activity remains saved and its photo status becomes `failed`; the user can retry from the activity history.
-- File validation accepts JPEG, PNG, and WebP only, with a maximum size of 4 MB.
-- Existing activity rows can also receive a photo from the history section.
-- Photos are not synchronized from WhatsApp. The SKP app uses the web-only source decision.
+- If upload fails, the activity remains saved and its evidence upload status becomes `failed`; the user can retry from the activity history.
+- File validation accepts JPG/JPEG, PNG, WebP, PDF, DOC/DOCX, XLS/XLSX, and PPT/PPTX, with a maximum size of 4 MB. Server-side validation checks the actual file signature/container.
+- Existing activity rows can also receive an evidence file from the history section.
+- Evidence files are not synchronized from WhatsApp. The SKP app uses the web-only source decision.
 
 ## Initial data model
 
@@ -182,9 +181,9 @@ Table: `public.skp_activities`
 | aktivitas | text | Activity description |
 | indikator | text | One exact official SKP indicator |
 | source | text | Defaults to `web` |
-| drive_file_id | text nullable | Reserved for later Drive integration |
-| drive_file_url | text nullable | Reserved for later Drive integration |
-| photo_upload_status | text | `not_required`, `pending`, `uploaded`, `failed` |
+| drive_file_id | text nullable | Google Drive file ID for the uploaded evidence file |
+| drive_file_url | text nullable | Google Drive link for the uploaded evidence file |
+| photo_upload_status | text | Legacy column name retained for compatibility; evidence states: `not_required`, `pending`, `uploaded`, `failed` |
 | created_at | timestamptz | Creation timestamp |
 | updated_at | timestamptz | Reserved for future update flow |
 
@@ -202,13 +201,13 @@ This is the SKP Activity Tracker application schema, separate from the existing 
 - [ ] Activity appears in history after save and page refresh.
 - [ ] A second user cannot read or modify the first user's rows (RLS test).
 - [ ] Monthly XLSX export downloads the selected month and contains the expected rows.
-- [ ] Photo upload requires authentication and rejects non-image files or files over 4 MB.
+- [ ] Evidence upload requires authentication and rejects unsupported or signature-mismatched files, empty files, and files over 4 MB.
 - [ ] Successful Drive upload records the Drive file ID, URL, and uploaded status.
-- [ ] Failed photo upload leaves the activity saved and can be retried.
+- [ ] Failed evidence upload leaves the activity saved and can be retried.
 - [ ] Google Drive OAuth secrets are configured only in local environment/Vercel server-only variables.\n- [ ] An empty month produces a valid XLSX workbook.\n- [ ] An unauthenticated export request is rejected.\n- [ ] No `.env.local` or secrets are committed.
 
 ## Known limitations
 
 - The current implementation provides client-side Supabase authentication and relies on Supabase RLS for row isolation. Add server-side session handling before introducing privileged server features.
-- The UI supports create/read/delete and optional photo upload/retry. Update and analytics are future work.
+- The UI supports create/read/delete and optional evidence upload/retry. Update and analytics are future work.
 - Google Drive upload requires the one-time OAuth configuration described above; no n8n integration is used.

@@ -1,16 +1,30 @@
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { MAX_EVIDENCE_FILE_SIZE } from "@/lib/skp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const FOLDER_NAME = "SKP Activity Tracker";
 const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
 
-type ImageInfo = {
-  mimeType: "image/jpeg" | "image/png" | "image/webp";
-  extension: "jpg" | "png" | "webp";
+type EvidenceInfo = {
+  mimeType: string;
+  extension: string;
+};
+
+const EVIDENCE_MIME_TYPES: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  pdf: "application/pdf",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 };
 
 function sanitizeActivityFilename(value: string): string {
@@ -24,29 +38,43 @@ function sanitizeActivityFilename(value: string): string {
   return Array.from(cleaned).slice(0, 100).join("").replace(/[. ]+$/g, "") || "Aktivitas";
 }
 
-function detectImageType(bytes: Buffer): ImageInfo | null {
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return { mimeType: "image/jpeg", extension: "jpg" };
-  }
+function detectEvidenceType(bytes: Buffer, originalFilename: string): EvidenceInfo | null {
+  const extension = originalFilename.split(".").pop()?.toLowerCase() ?? "";
+  const mimeType = EVIDENCE_MIME_TYPES[extension];
+  if (!mimeType) return null;
 
-  if (
-    bytes.length >= 8 &&
-    bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-  ) {
-    return { mimeType: "image/png", extension: "png" };
-  }
-
-  if (
-    bytes.length >= 12 &&
+  const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const isPng = bytes.length >= 8 &&
+    bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const isWebp = bytes.length >= 12 &&
     bytes.toString("ascii", 0, 4) === "RIFF" &&
-    bytes.toString("ascii", 8, 12) === "WEBP"
-  ) {
-    return { mimeType: "image/webp", extension: "webp" };
+    bytes.toString("ascii", 8, 12) === "WEBP";
+  const isPdf = bytes.length >= 5 && bytes.toString("ascii", 0, 5) === "%PDF-";
+  const isOleCompoundFile = bytes.length >= 8 &&
+    bytes.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+  const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b &&
+    bytes[2] === 0x03 && bytes[3] === 0x04;
+  const hasZipEntry = (entry: string) => bytes.includes(Buffer.from(entry, "utf8"));
+
+  if ((extension === "jpg" || extension === "jpeg") && isJpeg) return { mimeType, extension };
+  if (extension === "png" && isPng) return { mimeType, extension };
+  if (extension === "webp" && isWebp) return { mimeType, extension };
+  if (extension === "pdf" && isPdf) return { mimeType, extension };
+
+  // Legacy DOC/XLS/PPT files share the OLE Compound File container signature.
+  if (["doc", "xls", "ppt"].includes(extension) && isOleCompoundFile) {
+    return { mimeType, extension };
+  }
+
+  // Modern Office Open XML files are ZIP containers with type-specific package entries.
+  if (isZip && hasZipEntry("[Content_Types].xml")) {
+    if (extension === "docx" && hasZipEntry("word/")) return { mimeType, extension };
+    if (extension === "xlsx" && hasZipEntry("xl/")) return { mimeType, extension };
+    if (extension === "pptx" && hasZipEntry("ppt/")) return { mimeType, extension };
   }
 
   return null;
 }
-
 async function getGoogleAccessToken(): Promise<string> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -187,7 +215,7 @@ export async function POST(request: Request) {
   try {
     const form = await request.formData();
     activityId = String(form.get("activityId") ?? "");
-    const photo = form.get("photo");
+    const evidence = form.get("evidence") ?? form.get("photo");
 
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activityId)) {
       return Response.json({ error: "ID aktivitas tidak valid." }, { status: 400 });
@@ -210,40 +238,42 @@ export async function POST(request: Request) {
         .eq("id", activityId);
     };
 
-    if (!(photo instanceof File)) {
+    if (!(evidence instanceof File)) {
       await markFailed();
-      return Response.json({ error: "File foto tidak ditemukan." }, { status: 400 });
+      return Response.json({ error: "File bukti tidak ditemukan." }, { status: 400 });
     }
 
-    if (photo.size <= 0 || photo.size > MAX_FILE_SIZE) {
+    if (evidence.size <= 0 || evidence.size > MAX_EVIDENCE_FILE_SIZE) {
       await markFailed();
-      return Response.json({ error: "Ukuran foto harus lebih dari 0 dan maksimal 4 MB." }, { status: 413 });
+      return Response.json({ error: "Ukuran file bukti harus lebih dari 0 dan maksimal 4 MB." }, { status: 413 });
     }
 
-    const bytes = Buffer.from(await photo.arrayBuffer());
-    const imageInfo = detectImageType(bytes);
+    const bytes = Buffer.from(await evidence.arrayBuffer());
+    const evidenceInfo = detectEvidenceType(bytes, evidence.name);
 
-    if (!imageInfo) {
+    if (!evidenceInfo) {
       await markFailed();
-      return Response.json({ error: "Format foto harus JPG, PNG, atau WebP." }, { status: 415 });
+      return Response.json({
+        error: "Format file tidak didukung atau isi file tidak sesuai dengan ekstensi. Gunakan JPG, PNG, WebP, PDF, DOC/DOCX, XLS/XLSX, atau PPT/PPTX.",
+      }, { status: 415 });
     }
 
     googleAccessToken = await getGoogleAccessToken();
     const folderId = await getOrCreateFolder(googleAccessToken);
     const activityName = sanitizeActivityFilename(activity.aktivitas);
-    const filename = `${activity.tanggal} - ${activityName}.${imageInfo.extension}`;
+    const filename = `${activity.tanggal} - ${activityName}.${evidenceInfo.extension}`;
     const boundary = `skp_tracker_${randomUUID().replace(/-/g, "")}`;
 
     const metadata = {
       name: filename,
-      mimeType: imageInfo.mimeType,
+      mimeType: evidenceInfo.mimeType,
       parents: [folderId],
       appProperties: { skpActivityId: activityId },
     };
 
     const body = Buffer.concat([
       Buffer.from(
-        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${imageInfo.mimeType}\r\n\r\n`,
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${evidenceInfo.mimeType}\r\n\r\n`,
         "utf8"
       ),
       bytes,
@@ -269,7 +299,7 @@ export async function POST(request: Request) {
     };
 
     if (!uploadResponse.ok || !uploadData.id) {
-      console.error("Google Drive photo upload failed:", uploadResponse.status);
+      console.error("Google Drive evidence upload failed:", uploadResponse.status);
       throw new Error("GOOGLE_DRIVE_UPLOAD_FAILED");
     }
 
@@ -327,9 +357,9 @@ export async function POST(request: Request) {
       }, { status: 502 });
     }
 
-    console.error("SKP photo upload failed:", error instanceof Error ? error.message : "Unknown error");
+    console.error("SKP evidence upload failed:", error instanceof Error ? error.message : "Unknown error");
     return Response.json({
-      error: "Foto belum berhasil diunggah ke Google Drive. Aktivitas tetap tersimpan; Anda dapat mencoba unggah ulang.",
+      error: "File bukti belum berhasil diunggah ke Google Drive. Aktivitas tetap tersimpan; Anda dapat mencoba unggah ulang.",
     }, { status: 502 });
   }
 }

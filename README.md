@@ -73,7 +73,8 @@ Not included yet:
 
 - Select a month in the activity history section and choose **Download XLSX**.
 - The report filters `skp_activities.tanggal` using the selected calendar month.
-- Workbook columns: No., Tanggal, Aktivitas, Indikator SKP.
+- Workbook columns: No., Tanggal, Aktivitas, Indikator SKP, Bukti Foto.
+- The **Bukti Foto** column contains `Sudah` only when `photo_upload_status = uploaded`; all other photo states (`not_required`, `pending`, or `failed`) are shown as `Belum`.
 - Filename: `riwayat-aktivitas-skp-YYYY-MM.xlsx`.
 - The endpoint uses the signed-in user's JWT and the existing Supabase RLS policies. No additional key or database migration is required.
 - Months with no records still produce a workbook with a clear empty-period message.

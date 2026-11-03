@@ -15,7 +15,6 @@ Included:
 Not included yet:
 - AI extraction or n8n webhook integration.
 - WhatsApp-to-app synchronization. The current decision is web-only, so WhatsApp entries are not included in this app.
-- Google Drive evidence upload is optional and performed after the SKP activity has been saved. Supported files include images, PDF, Word, Excel, and PowerPoint documents.
 - Edit UI, analytics, and AI/n8n extraction.
 
 ## Architecture decisions
@@ -94,9 +93,9 @@ The activity history can be exported as an Excel workbook from the **Riwayat Akt
 
 ### Bukti status rule
 
-The **Bukti** value is derived from the existing `skp_activities.evidence_upload_status` column (a legacy name retained for compatibility), not merely from whether an evidence file was selected on the form.
+The **Bukti** value is derived from the existing `skp_activities.photo_upload_status` column (a legacy name retained for compatibility), not merely from whether an evidence file was selected on the form.
 
-| `evidence_upload_status` | Value in XLSX | Meaning |
+| `photo_upload_status` | Value in XLSX | Meaning |
 |---|---|---|
 | `uploaded` | **Sudah** | The evidence file upload to Google Drive completed and the activity row was updated successfully. |
 | `not_required` | **Belum** | No evidence file was selected for the activity. |
@@ -117,7 +116,7 @@ Only `uploaded` is reported as **Sudah**. All other supported states are reporte
 
 Evidence upload is optional and happens after the SKP activity row has been saved. The app accepts image files (JPG/JPEG, PNG, WebP) and documents (PDF, Word DOC/DOCX, Excel XLS/XLSX, PowerPoint PPT/PPTX), up to 4 MB per file. The server validates the file extension against its actual signature or container before upload; it does not rely only on the browser-provided MIME type. Files are uploaded to a folder named `SKP Activity Tracker` in the authorized Google Drive. The folder and uploaded files remain private; the app does not create public sharing permissions. Drive filenames use the activity date and a sanitized version of the activity description (for example, `2026-11-02 - Menyusun lesson plan Google Sheets.pdf`); long descriptions are shortened to keep filenames manageable.
 
-The server endpoint is `POST /api/activities/evidence` (the existing route is retained for compatibility). It accepts the `evidence` form field and also accepts the legacy `evidence` field. It requires the signed-in Supabase user's JWT, verifies activity ownership through RLS, validates the actual file signature/container and size, uploads the evidence file with the Google Drive API, then stores `drive_file_id`, `drive_file_url`, and the existing `evidence_upload_status` in `public.skp_activities`. The database column name is retained to avoid a migration and preserve existing activity records. No n8n workflow is involved and no Supabase service-role key is used.
+The server endpoint is `POST /api/activities/photo` (the existing route is retained for compatibility). It accepts the `evidence` form field and also accepts the legacy `photo` form field. It requires the signed-in Supabase user's JWT, verifies activity ownership through RLS, validates the actual file signature/container and size, uploads the evidence file with the Google Drive API, then stores `drive_file_id`, `drive_file_url`, and the existing `photo_upload_status` in `public.skp_activities`. The database column name is retained to avoid a migration and preserve existing activity records. No n8n workflow is involved and no Supabase service-role key is used.
 
 ### One-time Google Cloud setup
 
@@ -163,7 +162,7 @@ The refresh token is issued for offline access. Google notes that OAuth projects
 
 ### Evidence behavior
 
-- New activity first writes to Supabase with the existing `evidence_upload_status` set to `pending` when an evidence file was selected.
+- New activity first writes to Supabase with the existing `photo_upload_status` set to `pending` when an evidence file was selected.
 - The server uploads the file and then updates the row to `uploaded` with Drive metadata.
 - If upload fails, the activity remains saved and its evidence upload status becomes `failed`; the user can retry from the activity history.
 - File validation accepts JPG/JPEG, PNG, WebP, PDF, DOC/DOCX, XLS/XLSX, and PPT/PPTX, with a maximum size of 4 MB. Server-side validation checks the actual file signature/container.
@@ -182,9 +181,9 @@ Table: `public.skp_activities`
 | aktivitas | text | Activity description |
 | indikator | text | One exact official SKP indicator |
 | source | text | Defaults to `web` |
-| drive_file_id | text nullable | Reserved for later Drive integration |
-| drive_file_url | text nullable | Reserved for later Drive integration |
-| evidence_upload_status | text | Legacy column name retained for compatibility; evidence states: `not_required`, `pending`, `uploaded`, `failed` |
+| drive_file_id | text nullable | Google Drive file ID for the uploaded evidence file |
+| drive_file_url | text nullable | Google Drive link for the uploaded evidence file |
+| photo_upload_status | text | Legacy column name retained for compatibility; evidence states: `not_required`, `pending`, `uploaded`, `failed` |
 | created_at | timestamptz | Creation timestamp |
 | updated_at | timestamptz | Reserved for future update flow |
 

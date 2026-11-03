@@ -334,7 +334,7 @@ export default function HomePage() {
             />
             <span className="field-hint">Gambar (JPG, PNG, WebP), PDF, Word (DOC/DOCX), Excel (XLS/XLSX), atau PowerPoint (PPT/PPTX) · Maksimal 4 MB. File diunggah ke folder Google Drive setelah aktivitas tersimpan.</span>
           </label>
-          {photo && <div className="full selected-evidence"><Paperclip size={15}/><span>{photo.name}</span><button type="button" className="text-button" onClick={()=>setEvidence(null)}>Hapus</button></div>}
+          {evidence && <div className="full selected-evidence"><Paperclip size={15}/><span>{evidence.name}</span><button type="button" className="text-button" onClick={()=>setEvidence(null)}>Hapus</button></div>}
           <div className="full actions"><button className="primary" type="submit" disabled={saving || uploadingActivityId !== null}><Plus size={16}/>{saving ? "Menyimpan aktivitas..." : uploadingActivityId ? "Mengunggah bukti..." : "Simpan aktivitas"}</button></div>
         </form>
         {message && <p className="alert success">{message}</p>}
@@ -371,7 +371,7 @@ export default function HomePage() {
         {exportError && <p className="alert error" role="alert">{exportError}</p>}
         {activities.length === 0 ? <div className="empty">Belum ada aktivitas. Tambahkan catatan pertama melalui formulir di atas.</div> :
           <div className="activity-list">{activities.map(item=><article className="activity" key={item.id}>
-            <div className="activity-meta"><span>{formatDate(item.tanggal)}</span><span className="status">{item.photo_upload_status === "uploaded" ? "Bukti tersimpan" : item.photo_upload_status === "failed" ? "Upload bukti gagal" : item.photo_upload_status === "pending" ? "Menunggu upload" : "Tanpa bukti"}</span></div>
+            <div className="activity-meta"><span>{formatDate(item.tanggal)}</span><span className="status">{item.photo_upload_status === "uploaded" ? "Bukti tersimpan" : item.photo_upload_status === "failed" ? "Upload bukti gagal" : item.photo_upload_status === "pending" ? "Menunggu upload bukti" : "Tanpa bukti"}</span></div>
             <p>{item.aktivitas}</p><small>{item.indikator}</small>
             {deleteCandidate?.id === item.id ? (
               <div className="delete-confirmation">
@@ -380,7 +380,7 @@ export default function HomePage() {
                   <p>Aktivitas ini akan dihapus dari SKP Tracker. File bukti dukung di Google Drive tidak ikut terhapus otomatis.</p>
                   {item.drive_file_url ? (
                     <a className="evidence-link" href={item.drive_file_url} target="_blank" rel="noreferrer">
-                      <ExternalLink size={14}/> Buka foto di Google Drive sebelum menghapus
+                      <ExternalLink size={14}/> Buka bukti di Google Drive sebelum menghapus
                     </a>
                   ) : (
                     <p className="delete-reminder-copy">Jika file bukti untuk aktivitas ini pernah diunggah, periksa folder <strong>SKP Activity Tracker</strong> dan hapus secara manual.</p>
@@ -424,7 +424,7 @@ export default function HomePage() {
                       }}
                     />
                     {uploadingActivityId === item.id ? <RefreshCw size={14}/> : <Upload size={14}/>}
-                    {uploadingActivityId === item.id ? "Mengunggah..." : item.photo_upload_status === "failed" ? "Coba unggah ulang" : "Unggah foto"}
+                    {uploadingActivityId === item.id ? "Mengunggah..." : item.photo_upload_status === "failed" ? "Coba unggah ulang" : "Unggah bukti"}
                   </label>
                 )}
                 <button

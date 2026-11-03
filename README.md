@@ -71,13 +71,40 @@ Not included yet:
 
 ## Monthly XLSX export
 
-- Select a month in the activity history section and choose **Download XLSX**.
-- The report filters `skp_activities.tanggal` using the selected calendar month.
-- Workbook columns: No., Tanggal, Aktivitas, Indikator SKP, Bukti Foto.
-- The **Bukti Foto** column contains `Sudah` only when `photo_upload_status = uploaded`; all other photo states (`not_required`, `pending`, or `failed`) are shown as `Belum`.
-- Filename: `riwayat-aktivitas-skp-YYYY-MM.xlsx`.
-- The endpoint uses the signed-in user's JWT and the existing Supabase RLS policies. No additional key or database migration is required.
-- Months with no records still produce a workbook with a clear empty-period message.
+The activity history can be exported as an Excel workbook from the **Riwayat Aktivitas** section. Select the reporting month, then choose **Download XLSX**.
+
+### Report scope and access
+
+- The selected month is applied to `skp_activities.tanggal` using a start-inclusive, next-month-exclusive date range.
+- The report contains only rows visible to the currently signed-in user. The endpoint validates the user's Supabase JWT and queries through the existing Row Level Security (RLS) policies.
+- Records are read in pages to avoid silently truncating reports at the API row limit.
+- Filename format: `riwayat-aktivitas-skp-YYYY-MM.xlsx`.
+- A month with no activity records still produces a valid workbook with an empty-period message.
+- This export requires no additional environment variable, credential, or database migration.
+
+### Workbook columns
+
+| Column | Description |
+|---|---|
+| No. | Sequential number within the exported report. |
+| Tanggal | Activity date, formatted as `DD-MM-YYYY`. |
+| Aktivitas | Activity description saved in SKP Tracker. |
+| Indikator SKP | The official SKP indicator selected when the activity was recorded. |
+| Bukti Foto | Indicates whether the activity's photo upload to Google Drive has completed successfully. |
+
+### Bukti Foto status rule
+
+The **Bukti Foto** value is derived from `skp_activities.photo_upload_status`, not merely from whether a photo was selected on the form.
+
+| `photo_upload_status` | Value in XLSX | Meaning |
+|---|---|---|
+| `uploaded` | **Sudah** | The photo upload to Google Drive completed and the activity row was updated successfully. |
+| `not_required` | **Belum** | No photo was required or attached to the activity. |
+| `pending` | **Belum** | A photo upload is pending or has not completed. |
+| `failed` | **Belum** | The photo upload failed and can be retried from the activity history. |
+
+Only `uploaded` is reported as **Sudah**. All other supported states are reported as **Belum**. Therefore, an activity with a selected photo is not marked **Sudah** until the upload status has been saved as `uploaded`.
+
 
 ## Deleting an activity
 

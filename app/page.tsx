@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Download, ExternalLink, LogOut, Paperclip, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
+import { Check, Download, ExternalLink, LogOut, Paperclip, Pencil, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { EVIDENCE_ACCEPT, formatDate, SKP_INDICATORS, SkpActivity, SkpIndicator, todayInMakassar, validateEvidenceFile } from "@/lib/skp";
 
@@ -25,6 +25,11 @@ export default function HomePage() {
   const [evidence, setEvidence] = useState<File | null>(null);
   const [evidenceInputKey, setEvidenceInputKey] = useState(0);
   const [uploadingActivityId, setUploadingActivityId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editActivity, setEditActivity] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editIndicator, setEditIndicator] = useState<SkpIndicator | "">("");
+  const [updatingActivityId, setUpdatingActivityId] = useState<string | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<SkpActivity | null>(null);
   const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
   const [deletedEvidenceReminder, setDeletedEvidenceReminder] = useState<{
@@ -230,6 +235,65 @@ export default function HomePage() {
     }
   }
 
+  function beginEdit(item: SkpActivity) {
+    setError("");
+    setMessage("");
+    setDeleteCandidate(null);
+    setEditingId(item.id);
+    setEditActivity(item.aktivitas);
+    setEditDate(item.tanggal);
+    setEditIndicator(item.indikator);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditActivity("");
+    setEditDate("");
+    setEditIndicator("");
+  }
+
+  async function updateActivity(event: FormEvent, activityId: string) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+
+    if (!supabase || !userId) {
+      setError("Sesi login tidak tersedia. Silakan login kembali.");
+      return;
+    }
+    if (!editActivity.trim() || !editDate || !editIndicator) {
+      setError("Lengkapi aktivitas, tanggal, dan pilih indikator.");
+      return;
+    }
+
+    setUpdatingActivityId(activityId);
+    try {
+      const { data: updatedActivity, error: updateError } = await supabase
+        .from("skp_activities")
+        .update({
+          tanggal: editDate,
+          aktivitas: editActivity.trim(),
+          indikator: editIndicator,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", activityId)
+        .eq("user_id", userId)
+        .select("id")
+        .maybeSingle();
+
+      if (updateError) throw new Error(updateError.message);
+      if (!updatedActivity) throw new Error("Aktivitas tidak ditemukan atau Anda tidak memiliki akses untuk mengubahnya.");
+
+      cancelEdit();
+      setMessage("Aktivitas berhasil diperbarui.");
+      await loadActivities();
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Aktivitas gagal diperbarui.");
+    } finally {
+      setUpdatingActivityId(null);
+    }
+  }
+
   async function downloadMonthlyReport() {
     if (!supabase || !session) return;
 
@@ -278,6 +342,7 @@ export default function HomePage() {
   async function signOut() {
     if (supabase) await supabase.auth.signOut();
     setActivities([]);
+    cancelEdit();
   }
 
   if (loading) return <main className="center"><p>Memuat aplikasi...</p></main>;
@@ -372,8 +437,28 @@ export default function HomePage() {
         {activities.length === 0 ? <div className="empty">Belum ada aktivitas. Tambahkan catatan pertama melalui formulir di atas.</div> :
           <div className="activity-list">{activities.map(item=><article className="activity" key={item.id}>
             <div className="activity-meta"><span>{formatDate(item.tanggal)}</span><span className="status">{item.photo_upload_status === "uploaded" ? "Bukti tersimpan" : item.photo_upload_status === "failed" ? "Upload bukti gagal" : item.photo_upload_status === "pending" ? "Menunggu upload bukti" : "Tanpa bukti"}</span></div>
-            <p>{item.aktivitas}</p><small>{item.indikator}</small>
-            {deleteCandidate?.id === item.id ? (
+            {editingId !== item.id && <><p>{item.aktivitas}</p><small>{item.indikator}</small></>}
+            {editingId === item.id ? (
+              <form className="form-grid edit-form" onSubmit={event => void updateActivity(event, item.id)}>
+                <label className="full">Aktivitas
+                  <textarea value={editActivity} onChange={event => setEditActivity(event.target.value)} rows={3} required />
+                </label>
+                <label>Tanggal
+                  <input type="date" value={editDate} onChange={event => setEditDate(event.target.value)} required />
+                </label>
+                <label className="full">Indikator SKP
+                  <select value={editIndicator} onChange={event => setEditIndicator(event.target.value as SkpIndicator)} required>
+                    <option value="">Pilih satu indikator</option>
+                    {SKP_INDICATORS.map((value, index) => <option key={value} value={value}>{index + 1}. {value}</option>)}
+                  </select>
+                </label>
+                <div className="full edit-note">Bukti dukung yang sudah tersimpan tidak diubah.</div>
+                <div className="full edit-actions">
+                  <button className="secondary" type="button" onClick={cancelEdit} disabled={updatingActivityId === item.id}><X size={16}/> Batal</button>
+                  <button className="primary" type="submit" disabled={updatingActivityId === item.id}><Check size={16}/>{updatingActivityId === item.id ? "Menyimpan..." : "Simpan perubahan"}</button>
+                </div>
+              </form>
+            ) : deleteCandidate?.id === item.id ? (
               <div className="delete-confirmation">
                 <div>
                   <strong>Konfirmasi penghapusan</strong>
@@ -427,6 +512,14 @@ export default function HomePage() {
                     {uploadingActivityId === item.id ? "Mengunggah..." : item.photo_upload_status === "failed" ? "Coba unggah ulang" : "Unggah bukti"}
                   </label>
                 )}
+                <button
+                  className="secondary compact-button"
+                  type="button"
+                  onClick={() => beginEdit(item)}
+                  disabled={uploadingActivityId !== null || deletingActivityId !== null || saving || editingId !== null}
+                >
+                  <Pencil size={14}/> Edit
+                </button>
                 <button
                   className="danger-text-button"
                   type="button"

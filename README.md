@@ -7,7 +7,7 @@ A separate web application for recording SKP work activities. This repository is
 Included:
 - Next.js App Router starter using Next.js 15, React 19, TypeScript, and Supabase JS.
 - Supabase email/password sign-in.
-- Create, list, and delete SKP activities.
+- Create, list, edit, and delete SKP activities.
 - Manual selection from the exact six official SKP indicators.
 - Activity date handling based on Asia/Makassar (WITA).
 - Supabase SQL migration with closed-list validation, per-user Row Level Security, and explicit Data API grants.
@@ -15,7 +15,7 @@ Included:
 Not included yet:
 - AI extraction or n8n webhook integration.
 - WhatsApp-to-app synchronization. The current decision is web-only, so WhatsApp entries are not included in this app.
-- Edit UI, analytics, and AI/n8n extraction.
+- Analytics and AI/n8n extraction.
 
 ## Architecture decisions
 
@@ -112,6 +112,13 @@ Only `uploaded` is reported as **Sudah**. All other supported states are reporte
 - Deleting an activity does **not** delete its Google Drive evidence file. The confirmation panel warns about this and provides the stored Drive file link when available.
 - After deletion, when the activity has a successful Drive upload, the app displays a reminder to manually delete the evidence file from the private `SKP Activity Tracker` folder and provides its stored Drive link when available. This is intentionally a manual step; the app does not send a Drive delete request.
 
+## Editing an activity
+
+- The activity owner can select **Edit** from the history list to change only the activity date, description, and official SKP indicator.
+- The update query is scoped to both the activity ID and signed-in user's ID, and remains subject to the existing `authenticated` UPDATE RLS policy. No service-role key, RLS-policy change, environment variable, or database migration is required.
+- Saving an edit updates `updated_at`. It does not alter `drive_file_id`, `drive_file_url`, or `photo_upload_status`; existing evidence files and their upload status are preserved.
+- While editing, the evidence upload and delete actions for that activity are hidden to avoid conflicting changes. The **Batal** action leaves the saved activity unchanged.
+
 ## Google Drive evidence upload
 
 Evidence upload is optional and happens after the SKP activity row has been saved. The app accepts image files (JPG/JPEG, PNG, WebP) and documents (PDF, Word DOC/DOCX, Excel XLS/XLSX, PowerPoint PPT/PPTX), up to 4 MB per file. The server validates the file extension against its actual signature or container before upload; it does not rely only on the browser-provided MIME type. Files are uploaded to a folder named `SKP Activity Tracker` in the authorized Google Drive. The folder and uploaded files remain private; the app does not create public sharing permissions. Drive filenames use the activity date and a sanitized version of the activity description (for example, `2026-11-02 - Menyusun lesson plan Google Sheets.pdf`); long descriptions are shortened to keep filenames manageable.
@@ -185,7 +192,7 @@ Table: `public.skp_activities`
 | drive_file_url | text nullable | Google Drive link for the uploaded evidence file |
 | photo_upload_status | text | Legacy column name retained for compatibility; evidence states: `not_required`, `pending`, `uploaded`, `failed` |
 | created_at | timestamptz | Creation timestamp |
-| updated_at | timestamptz | Reserved for future update flow |
+| updated_at | timestamptz | Timestamp refreshed when an activity is edited |
 
 This is the SKP Activity Tracker application schema, separate from the existing WhatsApp workflow and Google Sheets schema.
 
@@ -200,6 +207,7 @@ This is the SKP Activity Tracker application schema, separate from the existing 
 - [ ] User can save an activity with each of the six valid indicators.
 - [ ] Activity appears in history after save and page refresh.
 - [ ] A second user cannot read or modify the first user's rows (RLS test).
+- [ ] The owner can edit an activity's date, description, and official indicator without changing its Drive metadata or evidence status.
 - [ ] Monthly XLSX export downloads the selected month and contains the expected rows.
 - [ ] Evidence upload requires authentication and rejects unsupported or signature-mismatched files, empty files, and files over 4 MB.
 - [ ] Successful Drive upload records the Drive file ID, URL, and uploaded status.
@@ -209,5 +217,5 @@ This is the SKP Activity Tracker application schema, separate from the existing 
 ## Known limitations
 
 - The current implementation provides client-side Supabase authentication and relies on Supabase RLS for row isolation. Add server-side session handling before introducing privileged server features.
-- The UI supports create/read/delete and optional evidence upload/retry. Update and analytics are future work.
+- The UI supports create/read/edit/delete and optional evidence upload/retry. Analytics is future work.
 - Google Drive upload requires the one-time OAuth configuration described above; no n8n integration is used.

@@ -50,14 +50,23 @@ Not included yet:
    ```
 
 5. The initial schema migration has been applied to the connected SKP Supabase project. For a new environment, run `supabase/migrations/0001_initial_schema.sql` in its SQL Editor.
-6. In Supabase Authentication, create the first user manually. For a private personal app, keep public sign-ups disabled unless there is a specific reason to enable them.
+6. In Supabase Authentication, enable the Email provider and allow email sign-ups. Configure the email-confirmation template if confirmation is required.
 7. Run:
 
    ```bash
    npm run dev
    ```
 
-8. Open `http://localhost:3000` and sign in using the Supabase user.
+8. Open `http://localhost:3000`, create an account, then sign in. If email confirmation is enabled, verify the email first.
+
+## Pendaftaran akun
+
+Layar masuk menyediakan **Buat akun baru**. Pendaftaran menggunakan Supabase Auth email/password dan meminta konfirmasi password. Bila konfirmasi email aktif, pengguna harus membuka tautan verifikasi yang dikirim Supabase sebelum dapat masuk.
+
+Tambahkan URL dasar aplikasi ke **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs** agar tautan verifikasi kembali ke aplikasi:
+
+- `http://localhost:3000` untuk pengembangan lokal.
+- `https://<domain-produksi>` untuk produksi.
 
 ## Lupa password
 

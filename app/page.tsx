@@ -12,7 +12,9 @@ export default function HomePage() {
   const [activities, setActivities] = useState<SkpActivity[]>([]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [forgotPassword, setForgotPassword] = useState(false);
+  const [signingUp, setSigningUp] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [activity, setActivity] = useState("");
   const [date, setDate] = useState("");
@@ -102,6 +104,48 @@ export default function HomePage() {
         setError(authError.code === "invalid_credentials" || authError.message === "Invalid login credentials"
           ? "Email atau password salah. Lupa password? Silahkan klik tombol lupa password."
           : "Tidak dapat masuk. Periksa koneksi Anda atau hubungi administrator.");
+      }
+    } catch {
+      setError("Tidak dapat terhubung. Periksa koneksi Anda dan coba lagi.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function signUp(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+
+    if (!supabase) {
+      setError("Konfigurasi Supabase belum tersedia.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Password harus terdiri dari minimal 8 karakter.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Konfirmasi password tidak sama.");
+      return;
+    }
+
+    setAuthBusy(true);
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: { emailRedirectTo: window.location.origin },
+      });
+
+      if (signUpError) {
+        setError("Pendaftaran belum dapat diproses. Periksa data Anda lalu coba lagi.");
+      } else if (!data.session) {
+        setMessage("Pendaftaran berhasil. Periksa email Anda untuk memverifikasi akun sebelum masuk.");
+      } else {
+        setMessage("Pendaftaran berhasil. Anda telah masuk.");
       }
     } catch {
       setError("Tidak dapat terhubung. Periksa koneksi Anda dan coba lagi.");
@@ -401,29 +445,46 @@ export default function HomePage() {
         <section className="login-card">
           <div className="eyebrow">PERSONAL WORK LOG</div>
           <h1>SKP Activity Tracker</h1>
-          <p className="muted">{forgotPassword ? "Masukkan email akun untuk menerima link reset password." : "Masuk untuk mencatat dan meninjau aktivitas kerja."}</p>
+          <p className="muted">{forgotPassword ? "Masukkan email akun untuk menerima link reset password." : signingUp ? "Daftarkan akun baru untuk mulai mencatat aktivitas kerja." : "Masuk untuk mencatat dan meninjau aktivitas kerja."}</p>
           {!supabase && <div className="alert error">Konfigurasi Supabase belum tersedia. Isi variabel pada file .env.local.</div>}
-          <form onSubmit={forgotPassword ? requestPasswordReset : signIn} className="stack">
+          <form onSubmit={forgotPassword ? requestPasswordReset : signingUp ? signUp : signIn} className="stack">
             <label>Email<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} required /></label>
-            {!forgotPassword && <label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required /></label>}
-            <button className="primary" disabled={!supabase || authBusy}>{authBusy ? "Memproses..." : forgotPassword ? "Kirim link reset password" : "Masuk"}</button>
+            {!forgotPassword && <label>Password<input type="password" autoComplete={signingUp ? "new-password" : "current-password"} value={password} onChange={e=>setPassword(e.target.value)} required /></label>}
+            {signingUp && <label>Konfirmasi password<input type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} required /></label>}
+            <button className="primary" disabled={!supabase || authBusy}>{authBusy ? "Memproses..." : forgotPassword ? "Kirim link reset password" : signingUp ? "Daftar" : "Masuk"}</button>
             <button
               className="secondary"
               type="button"
               disabled={authBusy}
               onClick={() => {
                 setForgotPassword(current => !current);
+                setSigningUp(false);
                 setPassword("");
+                setConfirmPassword("");
                 setError("");
                 setMessage("");
               }}
             >
               {forgotPassword ? "Kembali ke login" : "Lupa password"}
             </button>
+            {!forgotPassword && <button
+              className="secondary"
+              type="button"
+              disabled={authBusy}
+              onClick={() => {
+                setSigningUp(current => !current);
+                setPassword("");
+                setConfirmPassword("");
+                setError("");
+                setMessage("");
+              }}
+            >
+              {signingUp ? "Sudah punya akun? Masuk" : "Buat akun baru"}
+            </button>}
           </form>
           {error && <p className="alert error" role="alert">{error}</p>}
           {message && <p className="alert success" role="status">{message}</p>}
-          <p className="hint">Akun dibuat oleh administrator melalui Supabase. Pendaftaran publik tidak disediakan pada tahap ini.</p>
+          {signingUp && <p className="hint">Setelah mendaftar, verifikasi email Anda bila diminta oleh Supabase.</p>}
         </section>
       </main>
     );

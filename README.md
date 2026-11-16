@@ -59,6 +59,17 @@ Not included yet:
 
 8. Open `http://localhost:3000` and sign in using the Supabase user.
 
+## Lupa password
+
+Pengguna dapat memilih **Lupa password** dari layar masuk. Aplikasi mengirim permintaan ke Supabase Auth; bila email terdaftar, Supabase mengirim email berisi tautan sekali pakai ke halaman reset. Halaman tersebut meminta password baru dan memperbaruinya melalui sesi pemulihan dari tautan email.
+
+Sebelum diuji atau dirilis, tambahkan URL berikut di **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs**:
+
+- `http://localhost:3000/reset-password` untuk pengembangan lokal.
+- `https://<domain-produksi>/reset-password` untuk produksi (gunakan domain aplikasi yang sebenarnya).
+
+Pastikan **Site URL** di halaman yang sama diisi dengan URL produksi aplikasi. Bila template email pemulihan pernah dikustomisasi, tautan di template harus menggunakan `{{ .RedirectTo }}` agar URL reset dari aplikasi dipakai. Pengguna selalu menerima respons netral dari aplikasi, sehingga email yang terdaftar tidak dapat ditebak dari formulir ini.
+
 ## Security notes
 
 - Never put a Supabase `service_role` or secret API key in `NEXT_PUBLIC_*` variables or browser code.
@@ -204,6 +215,7 @@ This is the SKP Activity Tracker application schema, separate from the existing 
 - [x] SELECT, INSERT, UPDATE, DELETE policies are restricted to `authenticated` and `auth.uid() = user_id`.
 - [ ] `npm install` completes.
 - [ ] A manually created user can sign in.
+- [ ] A failed sign-in shows the password-recovery guidance, and a registered email receives a reset link that can set a new password.
 - [ ] User can save an activity with each of the six valid indicators.
 - [ ] Activity appears in history after save and page refresh.
 - [ ] A second user cannot read or modify the first user's rows (RLS test).

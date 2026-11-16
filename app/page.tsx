@@ -12,6 +12,8 @@ export default function HomePage() {
   const [activities, setActivities] = useState<SkpActivity[]>([]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [forgotPassword, setForgotPassword] = useState(false);
+  const [authBusy, setAuthBusy] = useState(false);
   const [activity, setActivity] = useState("");
   const [date, setDate] = useState("");
   const [indicator, setIndicator] = useState<SkpIndicator | "">("");
@@ -48,7 +50,11 @@ export default function HomePage() {
       setLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "PASSWORD_RECOVERY" && nextSession) {
+        window.location.replace("/reset-password");
+        return;
+      }
       setSession(nextSession);
     });
 
@@ -86,8 +92,50 @@ export default function HomePage() {
       return;
     }
 
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
-    if (authError) setError(authError.message);
+    setAuthBusy(true);
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (authError) {
+        setError(authError.code === "invalid_credentials" || authError.message === "Invalid login credentials"
+          ? "Email atau password salah. Lupa password? Silahkan klik tombol lupa password."
+          : "Tidak dapat masuk. Periksa koneksi Anda atau hubungi administrator.");
+      }
+    } catch {
+      setError("Tidak dapat terhubung. Periksa koneksi Anda dan coba lagi.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function requestPasswordReset(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+
+    if (!supabase) {
+      setError("Konfigurasi Supabase belum tersedia.");
+      return;
+    }
+
+    setAuthBusy(true);
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (resetError) {
+        setError("Permintaan reset belum dapat diproses. Tunggu beberapa saat lalu coba lagi atau hubungi administrator.");
+      } else {
+        // This stays neutral so the form cannot be used to discover which email addresses have accounts.
+        setMessage("Jika email terdaftar, link reset password akan dikirim. Periksa kotak masuk dan folder spam.");
+      }
+    } catch {
+      setError("Tidak dapat terhubung. Periksa koneksi Anda dan coba lagi.");
+    } finally {
+      setAuthBusy(false);
+    }
   }
 
   const uploadEvidenceForActivity = useCallback(async (activityId: string, file: File): Promise<string | null> => {
@@ -353,14 +401,28 @@ export default function HomePage() {
         <section className="login-card">
           <div className="eyebrow">PERSONAL WORK LOG</div>
           <h1>SKP Activity Tracker</h1>
-          <p className="muted">Masuk untuk mencatat dan meninjau aktivitas kerja.</p>
+          <p className="muted">{forgotPassword ? "Masukkan email akun untuk menerima link reset password." : "Masuk untuk mencatat dan meninjau aktivitas kerja."}</p>
           {!supabase && <div className="alert error">Konfigurasi Supabase belum tersedia. Isi variabel pada file .env.local.</div>}
-          <form onSubmit={signIn} className="stack">
-            <label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required /></label>
-            <label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required /></label>
-            <button className="primary" disabled={!supabase}>Masuk</button>
+          <form onSubmit={forgotPassword ? requestPasswordReset : signIn} className="stack">
+            <label>Email<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} required /></label>
+            {!forgotPassword && <label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required /></label>}
+            <button className="primary" disabled={!supabase || authBusy}>{authBusy ? "Memproses..." : forgotPassword ? "Kirim link reset password" : "Masuk"}</button>
+            <button
+              className="secondary"
+              type="button"
+              disabled={authBusy}
+              onClick={() => {
+                setForgotPassword(current => !current);
+                setPassword("");
+                setError("");
+                setMessage("");
+              }}
+            >
+              {forgotPassword ? "Kembali ke login" : "Lupa password"}
+            </button>
           </form>
-          {error && <p className="alert error">{error}</p>}
+          {error && <p className="alert error" role="alert">{error}</p>}
+          {message && <p className="alert success" role="status">{message}</p>}
           <p className="hint">Akun dibuat oleh administrator melalui Supabase. Pendaftaran publik tidak disediakan pada tahap ini.</p>
         </section>
       </main>

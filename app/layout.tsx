@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SKP Activity Tracker",
+  title: "SKP Activity Tracker - Sikinerja NTT",
   description: "Pencatatan aktivitas kerja untuk kebutuhan SKP.",
 };
 

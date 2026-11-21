@@ -442,50 +442,57 @@ export default function HomePage() {
   if (!session) {
     return (
       <main className="login-wrap">
-        <section className="login-card">
-          <div className="eyebrow">PERSONAL WORK LOG</div>
-          <h1>SKP Activity Tracker</h1>
-          <p className="muted">{forgotPassword ? "Masukkan email akun untuk menerima link reset password." : signingUp ? "Daftarkan akun baru untuk mulai mencatat aktivitas kerja." : "Masuk untuk mencatat dan meninjau aktivitas kerja."}</p>
-          {!supabase && <div className="alert error">Konfigurasi Supabase belum tersedia. Isi variabel pada file .env.local.</div>}
-          <form onSubmit={forgotPassword ? requestPasswordReset : signingUp ? signUp : signIn} className="stack">
-            <label>Email<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} required /></label>
-            {!forgotPassword && <label>Password<input type="password" autoComplete={signingUp ? "new-password" : "current-password"} value={password} onChange={e=>setPassword(e.target.value)} required /></label>}
-            {signingUp && <label>Konfirmasi password<input type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} required /></label>}
-            <button className="primary" disabled={!supabase || authBusy}>{authBusy ? "Memproses..." : forgotPassword ? "Kirim link reset password" : signingUp ? "Daftar" : "Masuk"}</button>
-            <button
-              className="secondary"
-              type="button"
-              disabled={authBusy}
-              onClick={() => {
-                setForgotPassword(current => !current);
-                setSigningUp(false);
-                setPassword("");
-                setConfirmPassword("");
-                setError("");
-                setMessage("");
-              }}
-            >
-              {forgotPassword ? "Kembali ke login" : "Lupa password"}
-            </button>
-            {!forgotPassword && <button
-              className="secondary"
-              type="button"
-              disabled={authBusy}
-              onClick={() => {
-                setSigningUp(current => !current);
-                setPassword("");
-                setConfirmPassword("");
-                setError("");
-                setMessage("");
-              }}
-            >
-              {signingUp ? "Sudah punya akun? Masuk" : "Buat akun baru"}
-            </button>}
-          </form>
-          {error && <p className="alert error" role="alert">{error}</p>}
-          {message && <p className="alert success" role="status">{message}</p>}
-          {signingUp && <p className="hint">Setelah mendaftar, verifikasi email Anda bila diminta oleh Supabase.</p>}
-        </section>
+        <div className="login-content">
+          <div className="login-brand" aria-label="Identitas aplikasi">
+            <div className="eyebrow">PROVINSI NUSA TENGGARA TIMUR</div>
+            <h1>SKP Activity Tracker</h1>
+            <p>Sikinerja NTT</p>
+          </div>
+          <section className="login-card">
+            <div className="eyebrow">LOGIN USER</div>
+            <h2>SKP Activity Tracker - Sikinerja NTT</h2>
+            <p className="muted">{forgotPassword ? "Masukkan email akun untuk menerima link reset password." : signingUp ? "Daftarkan akun baru untuk mulai mencatat aktivitas kerja." : "Masuk untuk mencatat dan meninjau aktivitas kerja."}</p>
+            {!supabase && <div className="alert error">Konfigurasi Supabase belum tersedia. Isi variabel pada file .env.local.</div>}
+            <form onSubmit={forgotPassword ? requestPasswordReset : signingUp ? signUp : signIn} className="stack">
+              <label>Email<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} required /></label>
+              {!forgotPassword && <label>Password<input type="password" autoComplete={signingUp ? "new-password" : "current-password"} value={password} onChange={e=>setPassword(e.target.value)} required /></label>}
+              {signingUp && <label>Konfirmasi password<input type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} required /></label>}
+              <button className="primary" disabled={!supabase || authBusy}>{authBusy ? "Memproses..." : forgotPassword ? "Kirim link reset password" : signingUp ? "Daftar" : "Masuk"}</button>
+              <button
+                className="secondary"
+                type="button"
+                disabled={authBusy}
+                onClick={() => {
+                  setForgotPassword(current => !current);
+                  setSigningUp(false);
+                  setPassword("");
+                  setConfirmPassword("");
+                  setError("");
+                  setMessage("");
+                }}
+              >
+                {forgotPassword ? "Kembali ke login" : "Lupa password"}
+              </button>
+              {!forgotPassword && <button
+                className="secondary"
+                type="button"
+                disabled={authBusy}
+                onClick={() => {
+                  setSigningUp(current => !current);
+                  setPassword("");
+                  setConfirmPassword("");
+                  setError("");
+                  setMessage("");
+                }}
+              >
+                {signingUp ? "Sudah punya akun? Masuk" : "Buat akun baru"}
+              </button>}
+            </form>
+            {error && <p className="alert error" role="alert">{error}</p>}
+            {message && <p className="alert success" role="status">{message}</p>}
+            {signingUp && <p className="hint">Setelah mendaftar, verifikasi email Anda bila diminta oleh Supabase.</p>}
+          </section>
+        </div>
       </main>
     );
   }

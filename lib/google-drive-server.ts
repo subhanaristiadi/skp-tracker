@@ -19,9 +19,11 @@ function encryptionKey(): Buffer {
 }
 
 function serviceClient() {
+  const secretKey = process.env.SUPABASE_SECRET_KEY?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!secretKey) throw new Error("Missing required environment variable: SUPABASE_SECRET_KEY");
   return createClient(
     requiredEnvironment("NEXT_PUBLIC_SUPABASE_URL"),
-    requiredEnvironment("SUPABASE_SERVICE_ROLE_KEY"),
+    secretKey,
     { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } }
   );
 }

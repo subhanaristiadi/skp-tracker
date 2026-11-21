@@ -170,7 +170,7 @@ The server endpoint is `POST /api/activities/photo` (the existing route is retai
    GOOGLE_CLIENT_SECRET=...
    GOOGLE_OAUTH_REDIRECT_URI=http://localhost:3000/api/google-drive/callback
    GOOGLE_TOKEN_ENCRYPTION_KEY=...
-   SUPABASE_SERVICE_ROLE_KEY=...
+   SUPABASE_SECRET_KEY=...
    ```
 
 8. Apply `supabase/migrations/20261121081113_google_drive_connections.sql` to the connected Supabase project.
@@ -179,7 +179,7 @@ The server endpoint is `POST /api/activities/photo` (the existing route is retai
     - `GOOGLE_CLIENT_SECRET`
     - `GOOGLE_OAUTH_REDIRECT_URI` (for example `https://skp-tracker-app.vercel.app/api/google-drive/callback`)
     - `GOOGLE_TOKEN_ENCRYPTION_KEY` (a base64-encoded random 32-byte key)
-    - `SUPABASE_SERVICE_ROLE_KEY`
+    - `SUPABASE_SECRET_KEY` (a Supabase Secret Key; the legacy `SUPABASE_SERVICE_ROLE_KEY` is also supported)
 
     Mark them Sensitive/Encrypted where the dashboard allows it. Do not prefix them with `NEXT_PUBLIC_`.
 10. Add the production callback URL from `GOOGLE_OAUTH_REDIRECT_URI` to the OAuth client's Authorized redirect URIs in Google Cloud, then redeploy. Each user authorizes and refreshes their own Drive access through the application; do not configure a shared `GOOGLE_REFRESH_TOKEN`.

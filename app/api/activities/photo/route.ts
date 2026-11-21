@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { MAX_EVIDENCE_FILE_SIZE } from "@/lib/skp";
+import { getGoogleDriveConnection, googleOAuthConfig, saveGoogleDriveFolder } from "@/lib/google-drive-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -75,14 +76,8 @@ function detectEvidenceType(bytes: Buffer, originalFilename: string): EvidenceIn
 
   return null;
 }
-async function getGoogleAccessToken(): Promise<string> {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error("GOOGLE_DRIVE_NOT_CONFIGURED");
-  }
+async function getGoogleAccessToken(refreshToken: string): Promise<string> {
+  const { clientId, clientSecret } = googleOAuthConfig();
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -125,7 +120,8 @@ async function driveApiRequest(
   });
 }
 
-async function getOrCreateFolder(accessToken: string): Promise<string> {
+async function getOrCreateFolder(accessToken: string, savedFolderId: string | null): Promise<string> {
+  if (savedFolderId) return savedFolderId;
   const query = new URLSearchParams({
     q: `name = '${FOLDER_NAME}' and mimeType = '${FOLDER_MIME_TYPE}' and trashed = false`,
     pageSize: "10",
@@ -258,8 +254,14 @@ export async function POST(request: Request) {
       }, { status: 415 });
     }
 
-    googleAccessToken = await getGoogleAccessToken();
-    const folderId = await getOrCreateFolder(googleAccessToken);
+    const connection = await getGoogleDriveConnection(authData.user.id);
+    if (!connection) {
+      return Response.json({ error: "Google Drive belum tersambung. Sambungkan Drive Anda sebelum mengunggah bukti." }, { status: 409 });
+    }
+
+    googleAccessToken = await getGoogleAccessToken(connection.refreshToken);
+    const folderId = await getOrCreateFolder(googleAccessToken, connection.folderId);
+    if (!connection.folderId) await saveGoogleDriveFolder(authData.user.id, folderId);
     const activityName = sanitizeActivityFilename(activity.aktivitas);
     const filename = `${activity.tanggal} - ${activityName}.${evidenceInfo.extension}`;
     const boundary = `skp_tracker_${randomUUID().replace(/-/g, "")}`;
@@ -345,7 +347,7 @@ export async function POST(request: Request) {
         .eq("id", activityId);
     }
 
-    if (error instanceof Error && error.message === "GOOGLE_DRIVE_NOT_CONFIGURED") {
+    if (error instanceof Error && error.message.startsWith("Missing required environment variable:")) {
       return Response.json({
         error: "Integrasi Google Drive belum dikonfigurasi. Lengkapi environment variables pada Vercel.",
       }, { status: 503 });

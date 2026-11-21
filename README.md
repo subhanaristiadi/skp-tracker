@@ -141,9 +141,9 @@ Only `uploaded` is reported as **Sudah**. All other supported states are reporte
 
 ## Google Drive evidence upload
 
-Evidence upload is optional and happens after the SKP activity row has been saved. The app accepts image files (JPG/JPEG, PNG, WebP) and documents (PDF, Word DOC/DOCX, Excel XLS/XLSX, PowerPoint PPT/PPTX), up to 4 MB per file. The server validates the file extension against its actual signature or container before upload; it does not rely only on the browser-provided MIME type. Files are uploaded to a folder named `SKP Activity Tracker` in the authorized Google Drive. The folder and uploaded files remain private; the app does not create public sharing permissions. Drive filenames use the activity date and a sanitized version of the activity description (for example, `2026-11-02 - Menyusun lesson plan Google Sheets.pdf`); long descriptions are shortened to keep filenames manageable.
+Evidence upload is optional and happens after the SKP activity row has been saved. Each user must select **Sambungkan Google Drive** after logging in and authorize their own Google account. Files are uploaded to a private folder named `SKP Activity Tracker` in that user's Drive; the app does not create public sharing permissions. The server validates the file extension against its actual signature or container and accepts image files (JPG/JPEG, PNG, WebP) and documents (PDF, Word DOC/DOCX, Excel XLS/XLSX, PowerPoint PPT/PPTX), up to 4 MB per file.
 
-The server endpoint is `POST /api/activities/photo` (the existing route is retained for compatibility). It accepts the `evidence` form field and also accepts the legacy `photo` form field. It requires the signed-in Supabase user's JWT, verifies activity ownership through RLS, validates the actual file signature/container and size, uploads the evidence file with the Google Drive API, then stores `drive_file_id`, `drive_file_url`, and the existing `photo_upload_status` in `public.skp_activities`. The database column name is retained to avoid a migration and preserve existing activity records. No n8n workflow is involved and no Supabase service-role key is used.
+The server endpoint is `POST /api/activities/photo` (the existing route is retained for compatibility). It requires the signed-in user's JWT, verifies activity ownership through RLS, then uses that user's encrypted Google refresh token to upload the evidence file. Refresh tokens are stored in `public.google_drive_connections`, a RLS-enabled table with no browser-role privileges; server routes access it using a server-only Supabase service-role key. No n8n workflow is involved.
 
 ### One-time Google Cloud setup
 
@@ -151,10 +151,10 @@ The server endpoint is `POST /api/activities/photo` (the existing route is retai
 2. Create or select a Google Cloud project and enable **Google Drive API**.
 3. Configure the Google Auth Platform consent screen. For an individual account, choose External and add the Google account used for Drive as a test user while setting up.
 4. Create an OAuth Client ID with application type **Web application**.
-5. Add this exact Authorized redirect URI:
+5. Add the application callback as an Authorized redirect URI. For local development:
 
    ```text
-   http://localhost:53682/oauth2callback
+   http://localhost:3000/api/google-drive/callback
    ```
 
 6. Declare this least-privilege Drive scope in the consent configuration:
@@ -168,24 +168,21 @@ The server endpoint is `POST /api/activities/photo` (the existing route is retai
    ```env
    GOOGLE_CLIENT_ID=...
    GOOGLE_CLIENT_SECRET=...
+   GOOGLE_OAUTH_REDIRECT_URI=http://localhost:3000/api/google-drive/callback
+   GOOGLE_TOKEN_ENCRYPTION_KEY=...
+   SUPABASE_SERVICE_ROLE_KEY=...
    ```
 
-8. From the repository root, run:
-
-   ```bash
-   node --env-file=.env.local scripts/google-drive-auth.mjs
-   ```
-
-9. Open the Google authorization URL printed by the script, sign in with the intended Google account, and approve Drive file access. The script prints a refresh token in the terminal. Treat it as a password; do not paste it into chat, GitHub, screenshots, or public documentation.
-10. In Vercel → Project `skp-tracker-app` → Settings → Environment Variables, add these three **server-only** variables for Production, Preview, and Development:
+8. Apply `supabase/migrations/20261121081113_google_drive_connections.sql` to the connected Supabase project.
+9. In Vercel → Project `skp-tracker-app` → Settings → Environment Variables, add these five **server-only** variables for Production:
     - `GOOGLE_CLIENT_ID`
     - `GOOGLE_CLIENT_SECRET`
-    - `GOOGLE_REFRESH_TOKEN`
+    - `GOOGLE_OAUTH_REDIRECT_URI` (for example `https://skp-tracker-app.vercel.app/api/google-drive/callback`)
+    - `GOOGLE_TOKEN_ENCRYPTION_KEY` (a base64-encoded random 32-byte key)
+    - `SUPABASE_SERVICE_ROLE_KEY`
 
     Mark them Sensitive/Encrypted where the dashboard allows it. Do not prefix them with `NEXT_PUBLIC_`.
-11. Redeploy the latest commit so the new environment variables are available to the serverless function.
-
-The refresh token is issued for offline access. Google notes that OAuth projects left in External / Testing mode issue refresh tokens that expire after 7 days for Drive scopes. For an ongoing deployment, review the app's publishing status and complete any Google verification requirement that applies to the configured scopes.
+10. Add the production callback URL from `GOOGLE_OAUTH_REDIRECT_URI` to the OAuth client's Authorized redirect URIs in Google Cloud, then redeploy. Each user authorizes and refreshes their own Drive access through the application; do not configure a shared `GOOGLE_REFRESH_TOKEN`.
 
 ### Evidence behavior
 

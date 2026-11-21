@@ -40,6 +40,8 @@ export default function HomePage() {
     aktivitas: string;
     driveFileUrl: string | null;
   } | null>(null);
+  const [googleDriveConnected, setGoogleDriveConnected] = useState<boolean | null>(null);
+  const [googleDriveBusy, setGoogleDriveBusy] = useState(false);
 
   useEffect(() => {
     if (!supabase) {
@@ -64,6 +66,55 @@ export default function HomePage() {
   }, []);
 
   const userId = session?.user.id;
+
+  const loadGoogleDriveStatus = useCallback(async () => {
+    if (!supabase || !session) return;
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) return;
+    const response = await fetch("/api/google-drive/connection", { headers: { Authorization: `Bearer ${accessToken}` } });
+    const result = await response.json().catch(() => null) as { connected?: boolean } | null;
+    if (response.ok) setGoogleDriveConnected(result?.connected === true);
+  }, [session]);
+
+  useEffect(() => {
+    void loadGoogleDriveStatus();
+  }, [loadGoogleDriveStatus]);
+
+  async function connectGoogleDrive() {
+    if (!supabase) return;
+    setGoogleDriveBusy(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) throw new Error("Sesi login tidak tersedia. Silakan login kembali.");
+      const response = await fetch("/api/google-drive/connect", { headers: { Authorization: `Bearer ${accessToken}` } });
+      const result = await response.json().catch(() => null) as { authorizationUrl?: string; error?: string } | null;
+      if (!response.ok || !result?.authorizationUrl) throw new Error(result?.error || "Google Drive belum dapat disambungkan.");
+      window.location.assign(result.authorizationUrl);
+    } catch (connectError) {
+      setError(connectError instanceof Error ? connectError.message : "Google Drive belum dapat disambungkan.");
+      setGoogleDriveBusy(false);
+    }
+  }
+
+  async function disconnectGoogleDrive() {
+    if (!supabase || !window.confirm("Putuskan koneksi Google Drive? Bukti yang sudah tersimpan tidak akan dihapus.")) return;
+    setGoogleDriveBusy(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) throw new Error("Sesi login tidak tersedia. Silakan login kembali.");
+      const response = await fetch("/api/google-drive/connection", { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!response.ok) throw new Error("Koneksi Google Drive belum dapat diputus.");
+      setGoogleDriveConnected(false);
+      setMessage("Koneksi Google Drive telah diputus.");
+    } catch (disconnectError) {
+      setError(disconnectError instanceof Error ? disconnectError.message : "Koneksi Google Drive belum dapat diputus.");
+    } finally {
+      setGoogleDriveBusy(false);
+    }
+  }
 
   const loadActivities = useCallback(async () => {
     if (!supabase || !userId) return;
@@ -233,6 +284,10 @@ export default function HomePage() {
 
     const selectedEvidence = evidence;
     if (selectedEvidence) {
+      if (googleDriveConnected !== true) {
+        setError("Sambungkan Google Drive Anda sebelum mengunggah bukti.");
+        return;
+      }
       const validationError = validateEvidenceFile(selectedEvidence);
       if (validationError) {
         setError(validationError);
@@ -501,7 +556,12 @@ export default function HomePage() {
     <main className="app-shell">
       <header className="topbar">
         <div><div className="eyebrow">PERSONAL WORK LOG</div><h1>SKP Activity Tracker</h1></div>
-        <button className="secondary" onClick={signOut}><LogOut size={16}/> Keluar</button>
+        <div className="topbar-actions">
+          <button className="secondary" type="button" onClick={googleDriveConnected ? disconnectGoogleDrive : connectGoogleDrive} disabled={googleDriveBusy || googleDriveConnected === null}>
+            {googleDriveBusy ? "Memproses..." : googleDriveConnected ? "Putuskan Google Drive" : "Sambungkan Google Drive"}
+          </button>
+          <button className="secondary" onClick={signOut}><LogOut size={16}/> Keluar</button>
+        </div>
       </header>
 
       <section className="summary">
@@ -527,7 +587,7 @@ export default function HomePage() {
               accept={EVIDENCE_ACCEPT}
               onChange={e=>setEvidence(e.target.files?.[0] ?? null)}
             />
-            <span className="field-hint">Gambar (JPG, PNG, WebP), PDF, Word (DOC/DOCX), Excel (XLS/XLSX), atau PowerPoint (PPT/PPTX) · Maksimal 4 MB. File diunggah ke folder Google Drive setelah aktivitas tersimpan.</span>
+            <span className="field-hint">Gambar (JPG, PNG, WebP), PDF, Word (DOC/DOCX), Excel (XLS/XLSX), atau PowerPoint (PPT/PPTX) · Maksimal 4 MB. File diunggah ke Google Drive Anda setelah aktivitas tersimpan.</span>
           </label>
           {evidence && <div className="full selected-evidence"><Paperclip size={15}/><span>{evidence.name}</span><button type="button" className="text-button" onClick={()=>setEvidence(null)}>Hapus</button></div>}
           <div className="full actions"><button className="primary" type="submit" disabled={saving || uploadingActivityId !== null}><Plus size={16}/>{saving ? "Menyimpan aktivitas..." : uploadingActivityId ? "Mengunggah bukti..." : "Simpan aktivitas"}</button></div>

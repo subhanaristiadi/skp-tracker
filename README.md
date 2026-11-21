@@ -149,7 +149,7 @@ The server endpoint is `POST /api/activities/photo` (the existing route is retai
 
 1. Open the [Google Cloud Console](https://console.cloud.google.com/).
 2. Create or select a Google Cloud project and enable **Google Drive API**.
-3. Configure the Google Auth Platform consent screen. For an individual account, choose External and add the Google account used for Drive as a test user while setting up.
+3. Configure the Google Auth Platform consent screen. The current rollout is **External / Testing**: only the Google accounts listed as test users may connect Drive.
 4. Create an OAuth Client ID with application type **Web application**.
 5. Add the application callback as an Authorized redirect URI. For local development:
 
@@ -181,8 +181,16 @@ The server endpoint is `POST /api/activities/photo` (the existing route is retai
     - `GOOGLE_TOKEN_ENCRYPTION_KEY` (a base64-encoded random 32-byte key)
     - `SUPABASE_SECRET_KEY` (a Supabase Secret Key; the legacy `SUPABASE_SERVICE_ROLE_KEY` is also supported)
 
-    Mark them Sensitive/Encrypted where the dashboard allows it. Do not prefix them with `NEXT_PUBLIC_`.
+    Mark `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`, and `SUPABASE_SECRET_KEY` as Sensitive/Encrypted. `GOOGLE_CLIENT_ID` and `GOOGLE_OAUTH_REDIRECT_URI` are configuration values, but remain server-only and must not use a `NEXT_PUBLIC_` prefix.
 10. Add the production callback URL from `GOOGLE_OAUTH_REDIRECT_URI` to the OAuth client's Authorized redirect URIs in Google Cloud, then redeploy. Each user authorizes and refreshes their own Drive access through the application; do not configure a shared `GOOGLE_REFRESH_TOKEN`.
+
+### Current OAuth audience: limited testing
+
+The application is intentionally configured as an **External** OAuth app with Publishing status **Testing**. Before a user can select **Sambungkan Google Drive**, add their Google email address in **Google Cloud Console → Google Auth Platform → Audience → Test users**. Google limits a Testing project to 100 listed test users.
+
+Testing refresh tokens can expire after approximately seven days. When that happens, the affected user must use **Putuskan Google Drive** and **Sambungkan Google Drive** again. Do not add a shared refresh token to Vercel.
+
+To make Drive connection available to every Google account later, change the Publishing status to **In production** and complete any verification Google requires for the selected Drive scope. See [Google's OAuth app state overview](https://developers.google.com/identity/protocols/oauth2/production-readiness/overview).
 
 ### Evidence behavior
 
@@ -211,6 +219,17 @@ Table: `public.skp_activities`
 | created_at | timestamptz | Creation timestamp |
 | updated_at | timestamptz | Timestamp refreshed when an activity is edited |
 
+### `public.google_drive_connections`
+
+| Column | Type | Meaning |
+|---|---|---|
+| user_id | uuid | Supabase Auth user who owns the Drive connection |
+| refresh_token_ciphertext | text | AES-256-GCM encrypted, per-user Google refresh token; never returned to the browser |
+| drive_folder_id | text nullable | That user's `SKP Activity Tracker` folder ID |
+| connected_at / updated_at | timestamptz | Connection lifecycle timestamps |
+
+RLS is enabled without browser-role policies and table privileges are revoked from `anon` and `authenticated`. Only server code using the Supabase Secret Key can access the encrypted value.
+
 This is the SKP Activity Tracker application schema, separate from the existing WhatsApp workflow and Google Sheets schema.
 
 ## Verification checklist
@@ -234,6 +253,6 @@ This is the SKP Activity Tracker application schema, separate from the existing 
 
 ## Known limitations
 
-- The current implementation provides client-side Supabase authentication and relies on Supabase RLS for row isolation. Add server-side session handling before introducing privileged server features.
+- The application uses client-side Supabase authentication for the UI and validates the user's JWT again in every privileged server route before accessing a per-user encrypted Drive connection.
 - The UI supports create/read/edit/delete and optional evidence upload/retry. Analytics is future work.
 - Google Drive upload requires the one-time OAuth configuration described above; no n8n integration is used.

@@ -336,6 +336,7 @@ export async function POST(request: Request) {
       success: true,
       driveFileId: uploadData.id,
       driveFileUrl,
+      driveFolderUrl: `https://drive.google.com/drive/folders/${encodeURIComponent(folderId)}`,
     });
   } catch (error) {
     if (uploadedDriveFileId && googleAccessToken) {

@@ -20,7 +20,11 @@ export default function HomePage() {
   const [date, setDate] = useState("");
   const [indicator, setIndicator] = useState<SkpIndicator | "">("");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState<{ message: string; folderUrl?: string }>({ message: "" });
+  const { message } = notice;
+  function setMessage(message: string, folderUrl?: string) {
+    setNotice({ message, folderUrl });
+  }
   const [error, setError] = useState("");
   const [exportMonth, setExportMonth] = useState(todayInMakassar().slice(0, 7));
   const [exporting, setExporting] = useState(false);
@@ -233,10 +237,10 @@ export default function HomePage() {
     }
   }
 
-  const uploadEvidenceForActivity = useCallback(async (activityId: string, file: File): Promise<string | null> => {
-    if (!supabase) return "Konfigurasi Supabase belum tersedia.";
+  const uploadEvidenceForActivity = useCallback(async (activityId: string, file: File): Promise<{ error?: string; folderUrl?: string }> => {
+    if (!supabase) return { error: "Konfigurasi Supabase belum tersedia." };
     const validationError = validateEvidenceFile(file);
-    if (validationError) return validationError;
+    if (validationError) return { error: validationError };
 
     setUploadingActivityId(activityId);
 
@@ -258,14 +262,14 @@ export default function HomePage() {
         body: formData,
       });
 
-      const result = await response.json().catch(() => null) as { error?: string; success?: boolean } | null;
+      const result = await response.json().catch(() => null) as { error?: string; success?: boolean; driveFolderUrl?: string } | null;
       if (!response.ok) {
         throw new Error(result?.error || "File bukti gagal diunggah.");
       }
 
-      return null;
+      return { folderUrl: result?.driveFolderUrl };
     } catch (uploadError) {
-      return uploadError instanceof Error ? uploadError.message : "Terjadi kesalahan saat mengunggah bukti.";
+      return { error: uploadError instanceof Error ? uploadError.message : "Terjadi kesalahan saat mengunggah bukti." };
     } finally {
       setUploadingActivityId(null);
     }
@@ -324,11 +328,12 @@ export default function HomePage() {
 
     if (selectedEvidence) {
       setMessage("Aktivitas tersimpan. Bukti sedang diunggah ke Google Drive...");
-      const uploadError = await uploadEvidenceForActivity(insertedActivity.id, selectedEvidence);
-      if (uploadError) {
-        setError(`Aktivitas tetap tersimpan, tetapi bukti belum berhasil diunggah: ${uploadError}`);
+      const uploadResult = await uploadEvidenceForActivity(insertedActivity.id, selectedEvidence);
+      if (uploadResult.error) {
+        setMessage("");
+        setError(`Aktivitas tetap tersimpan, tetapi bukti belum berhasil diunggah: ${uploadResult.error}`);
       } else {
-        setMessage("Aktivitas dan bukti berhasil disimpan ke Google Drive.");
+        setMessage("Aktivitas dan bukti berhasil disimpan ke Google Drive.", uploadResult.folderUrl);
       }
     }
 
@@ -592,7 +597,7 @@ export default function HomePage() {
           {evidence && <div className="full selected-evidence"><Paperclip size={15}/><span>{evidence.name}</span><button type="button" className="text-button" onClick={()=>setEvidence(null)}>Hapus</button></div>}
           <div className="full actions"><button className="primary" type="submit" disabled={saving || uploadingActivityId !== null}><Plus size={16}/>{saving ? "Menyimpan aktivitas..." : uploadingActivityId ? "Mengunggah bukti..." : "Simpan aktivitas"}</button></div>
         </form>
-        {message && <p className="alert success">{message}</p>}
+        {message && <p className="alert success" role="status">{message}{notice.folderUrl && <> <a href={notice.folderUrl} target="_blank" rel="noreferrer">Buka folder Google Drive <ExternalLink size={13}/></a></>}</p>}
         {deletedEvidenceReminder && (
           <div className="alert delete-reminder" role="status">
             <strong>Pengingat file bukti di Google Drive</strong>
@@ -690,9 +695,9 @@ export default function HomePage() {
                         const selectedFile=e.target.files?.[0] ?? null;
                         e.target.value="";
                         if(selectedFile) {
-                          void uploadEvidenceForActivity(item.id, selectedFile).then(async uploadError=>{
-                            if(uploadError) setError(`Bukti belum berhasil diunggah: ${uploadError}`);
-                            else setMessage("Bukti berhasil diunggah ke Google Drive.");
+                          void uploadEvidenceForActivity(item.id, selectedFile).then(async uploadResult=>{
+                            if(uploadResult.error) setError(`Bukti belum berhasil diunggah: ${uploadResult.error}`);
+                            else setMessage("Bukti berhasil diunggah ke Google Drive.", uploadResult.folderUrl);
                             await loadActivities();
                           });
                         }

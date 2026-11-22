@@ -143,6 +143,8 @@ Only `uploaded` is reported as **Sudah**. All other supported states are reporte
 
 Evidence upload is optional and happens after the SKP activity row has been saved. Each user must select **Sambungkan Google Drive** after logging in and authorize their own Google account. New files are uploaded to a monthly subfolder inside the private `SKP Activity Tracker` folder, based on the saved activity date (for example, `Bukti Dukung SKP - November`). The same month folder is used across years. Existing files remain where they were uploaded. The app does not create public sharing permissions. The server validates the file extension against its actual signature or container and accepts image files (JPG/JPEG, PNG, WebP) and documents (PDF, Word DOC/DOCX, Excel XLS/XLSX, PowerPoint PPT/PPTX), up to 4 MB per file.
 
+After a successful upload, the confirmation includes a link to the destination folder in the user's Google Drive.
+
 The server endpoint is `POST /api/activities/photo` (the existing route is retained for compatibility). It requires the signed-in user's JWT, verifies activity ownership through RLS, then uses that user's encrypted Google refresh token to upload the evidence file. Refresh tokens are stored in `public.google_drive_connections`, a RLS-enabled table with no browser-role privileges; server routes access it using a server-only Supabase service-role key. No n8n workflow is involved.
 
 ### One-time Google Cloud setup

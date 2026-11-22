@@ -587,7 +587,7 @@ export default function HomePage() {
               accept={EVIDENCE_ACCEPT}
               onChange={e=>setEvidence(e.target.files?.[0] ?? null)}
             />
-            <span className="field-hint">Gambar (JPG, PNG, WebP), PDF, Word (DOC/DOCX), Excel (XLS/XLSX), atau PowerPoint (PPT/PPTX) · Maksimal 4 MB. File diunggah ke Google Drive Anda setelah aktivitas tersimpan.</span>
+            <span className="field-hint">Gambar (JPG, PNG, WebP), PDF, Word (DOC/DOCX), Excel (XLS/XLSX), atau PowerPoint (PPT/PPTX) · Maksimal 4 MB. File diunggah ke folder bulan aktivitas di Google Drive Anda setelah aktivitas tersimpan.</span>
           </label>
           {evidence && <div className="full selected-evidence"><Paperclip size={15}/><span>{evidence.name}</span><button type="button" className="text-button" onClick={()=>setEvidence(null)}>Hapus</button></div>}
           <div className="full actions"><button className="primary" type="submit" disabled={saving || uploadingActivityId !== null}><Plus size={16}/>{saving ? "Menyimpan aktivitas..." : uploadingActivityId ? "Mengunggah bukti..." : "Simpan aktivitas"}</button></div>

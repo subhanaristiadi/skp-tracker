@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 const FOLDER_NAME = "SKP Activity Tracker";
 const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
+const MONTH_NAMES = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
 type EvidenceInfo = {
   mimeType: string;
@@ -120,10 +121,10 @@ async function driveApiRequest(
   });
 }
 
-async function getOrCreateFolder(accessToken: string, savedFolderId: string | null): Promise<string> {
+async function getOrCreateFolder(accessToken: string, savedFolderId: string | null, name = FOLDER_NAME, parentId?: string): Promise<string> {
   if (savedFolderId) return savedFolderId;
   const query = new URLSearchParams({
-    q: `name = '${FOLDER_NAME}' and mimeType = '${FOLDER_MIME_TYPE}' and trashed = false`,
+    q: `name = '${name}' and mimeType = '${FOLDER_MIME_TYPE}' and trashed = false${parentId ? ` and '${parentId}' in parents` : ""}`,
     pageSize: "10",
     spaces: "drive",
     fields: "files(id,name)",
@@ -150,8 +151,9 @@ async function getOrCreateFolder(accessToken: string, savedFolderId: string | nu
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: FOLDER_NAME,
+        name,
         mimeType: FOLDER_MIME_TYPE,
+        ...(parentId ? { parents: [parentId] } : {}),
       }),
     }
   );
@@ -260,8 +262,12 @@ export async function POST(request: Request) {
     }
 
     googleAccessToken = await getGoogleAccessToken(connection.refreshToken);
-    const folderId = await getOrCreateFolder(googleAccessToken, connection.folderId);
-    if (!connection.folderId) await saveGoogleDriveFolder(authData.user.id, folderId);
+    const rootFolderId = await getOrCreateFolder(googleAccessToken, connection.folderId);
+    if (!connection.folderId) await saveGoogleDriveFolder(authData.user.id, rootFolderId);
+    const dateMatch = /^(\d{4})-(\d{2})-\d{2}$/.exec(activity.tanggal);
+    const monthIndex = dateMatch ? Number(dateMatch[2]) - 1 : -1;
+    if (monthIndex < 0 || monthIndex >= MONTH_NAMES.length) throw new Error("INVALID_ACTIVITY_DATE");
+    const folderId = await getOrCreateFolder(googleAccessToken, null, `Bukti Dukung SKP - ${MONTH_NAMES[monthIndex]}`, rootFolderId);
     const activityName = sanitizeActivityFilename(activity.aktivitas);
     const filename = `${activity.tanggal} - ${activityName}.${evidenceInfo.extension}`;
     const boundary = `skp_tracker_${randomUUID().replace(/-/g, "")}`;

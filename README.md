@@ -11,6 +11,7 @@ Included:
 - Manual selection from the exact six official SKP indicators.
 - Activity date handling based on Asia/Makassar (WITA).
 - Optional activity start and end time (`Waktu Mulai-Selesai`).
+- Activity history paginated at 10 activities per page.
 - Supabase SQL migration with closed-list validation, per-user Row Level Security, and explicit Data API grants.
 
 Not included yet:
@@ -50,7 +51,7 @@ Not included yet:
    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
    ```
 
-5. The initial schema migration has been applied to the connected SKP Supabase project. For a new environment, run `supabase/migrations/0001_initial_schema.sql` in its SQL Editor.
+5. The migrations have been applied to the connected SKP Supabase project. For a new environment, run the files in `supabase/migrations/` in filename order in its SQL Editor: `0001_initial_schema.sql`, then `20261121081113_google_drive_connections.sql`, then `20261124152200_activity_time_range.sql`.
 6. In Supabase Authentication, enable the Email provider and allow email sign-ups. Configure the email-confirmation template if confirmation is required.
 7. Run:
 
@@ -129,9 +130,9 @@ Only `uploaded` is reported as **Sudah**. All other supported states are reporte
 
 ## Browsing the activity history
 
-- The history lists **10 activities per page**, newest first, with a page control at the bottom: numbered pages, a jump to the first page, and a jump to the last page. The current page is highlighted.
-- A counter next to the control shows the visible range, for example `Menampilkan 11–20 dari 47 aktivitas`.
-- Paging happens in the browser on the list that is already loaded, so changing pages sends no additional Supabase request. Saving a new activity returns to page 1 so the new row is visible.
+- The history lists **10 activities per page**, newest first. A footer appears below the list once there is more than one page.
+- The footer holds a counter with the visible range, for example `Menampilkan 11–20 dari 47 aktivitas`, and a numbered page control: the current page is highlighted, long lists collapse the middle into an ellipsis, and jump buttons move to the first and last page (each shown when it is not the current page).
+- Paging happens in the browser on the list that is already loaded, so changing pages sends no additional Supabase request. Saving a new activity returns to page 1 so the new row is visible, and deleting the last row of the last page falls back to the previous page.
 - The monthly XLSX export is not paginated; it always contains every activity of the selected month.
 
 ## Deleting an activity
@@ -143,8 +144,8 @@ Only `uploaded` is reported as **Sudah**. All other supported states are reporte
 
 ## Editing an activity
 
-- The activity owner can select **Edit** from the history list to change only the activity date, description, and official SKP indicator.
-- The update query is scoped to both the activity ID and signed-in user's ID, and remains subject to the existing `authenticated` UPDATE RLS policy. No service-role key, RLS-policy change, environment variable, or database migration is required.
+- The activity owner can select **Edit** from the history list to change the activity date, the optional start-end time, the description, and the official SKP indicator.
+- The update query is scoped to both the activity ID and signed-in user's ID, and remains subject to the existing `authenticated` UPDATE RLS policy. No service-role key, RLS-policy change, or environment variable is required; editing a time range needs the activity time-range migration described below.
 - Saving an edit updates `updated_at`. It does not alter `drive_file_id`, `drive_file_url`, or `photo_upload_status`; existing evidence files and their upload status are preserved.
 - While editing, the evidence upload and delete actions for that activity are hidden to avoid conflicting changes. The **Batal** action leaves the saved activity unchanged.
 
@@ -268,16 +269,23 @@ This is the SKP Activity Tracker application schema, separate from the existing 
 - [ ] User can save an activity with each of the six valid indicators.
 - [ ] Activity appears in history after save and page refresh.
 - [ ] A second user cannot read or modify the first user's rows (RLS test).
-- [ ] The owner can edit an activity's date, description, and official indicator without changing its Drive metadata or evidence status.
+- [ ] The owner can edit an activity's date, start-end time, description, and official indicator without changing its Drive metadata or evidence status.
 - [ ] Saving an activity with a time range stores both values, and the history plus the XLSX `Waktu` column show `10:00–11:30`.
+- [ ] Saving an activity without a time range stores `null` in both time columns, and the history shows only the date.
+- [ ] The history shows 10 activities per page; the page control, the range counter, and the first/last jumps match the number of loaded rows.
 - [ ] Monthly XLSX export downloads the selected month and contains the expected rows.
 - [ ] Evidence upload requires authentication and rejects unsupported or signature-mismatched files, empty files, and files over 4 MB.
 - [ ] Successful Drive upload records the Drive file ID, URL, and uploaded status.
 - [ ] Failed evidence upload leaves the activity saved and can be retried.
-- [ ] Google Drive OAuth secrets are configured only in local environment/Vercel server-only variables.\n- [ ] An empty month produces a valid XLSX workbook.\n- [ ] An unauthenticated export request is rejected.\n- [ ] No `.env.local` or secrets are committed.
+- [ ] Google Drive OAuth secrets are configured only in local environment/Vercel server-only variables.
+- [ ] An empty month produces a valid XLSX workbook.
+- [ ] An unauthenticated export request is rejected.
+- [ ] No `.env.local` or secrets are committed.
 
 ## Known limitations
 
 - The application uses client-side Supabase authentication for the UI and validates the user's JWT again in every privileged server route before accessing a per-user encrypted Drive connection.
 - The UI supports create/read/edit/delete and optional evidence upload/retry. Analytics is future work.
+- History paging is done in the browser over the rows returned by one query. A single request is still bounded by the project's Data API row limit (1,000 rows by default), so a history larger than that needs server-side paging; the page control itself is unaffected because it counts only the loaded rows.
+- The time range is a pair of wall-clock WITA clock times, not a measured interval. It is not used for duration totals, overlap detection, or reporting beyond the `Waktu` column, and it cannot cross midnight because the end must be later than the start on the same date.
 - Google Drive upload requires the one-time OAuth configuration described above; no n8n integration is used.

@@ -3,8 +3,9 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Check, Download, ExternalLink, LogOut, Paperclip, Pencil, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
+import { TimeRangeSlider } from "@/components/time-range-slider";
 import { supabase } from "@/lib/supabase";
-import { EVIDENCE_ACCEPT, formatDate, SKP_INDICATORS, SkpActivity, SkpIndicator, todayInMakassar, validateEvidenceFile } from "@/lib/skp";
+import { defaultTimeRange, EVIDENCE_ACCEPT, explainDatabaseError, formatDate, formatTimeRange, normalizeTime, SKP_INDICATORS, SkpActivity, SkpIndicator, todayInMakassar, toDatabaseTime, validateEvidenceFile, validateTimeRange } from "@/lib/skp";
 
 export default function HomePage() {
   const [session, setSession] = useState<Session | null>(null);
@@ -18,6 +19,7 @@ export default function HomePage() {
   const [authBusy, setAuthBusy] = useState(false);
   const [activity, setActivity] = useState("");
   const [date, setDate] = useState("");
+  const [timeRange, setTimeRange] = useState(() => defaultTimeRange());
   const [indicator, setIndicator] = useState<SkpIndicator | "">("");
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ message: string; folderUrl?: string }>({ message: "" });
@@ -36,6 +38,7 @@ export default function HomePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editActivity, setEditActivity] = useState("");
   const [editDate, setEditDate] = useState("");
+  const [editTimeRange, setEditTimeRange] = useState({ start: "", end: "" });
   const [editIndicator, setEditIndicator] = useState<SkpIndicator | "">("");
   const [updatingActivityId, setUpdatingActivityId] = useState<string | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<SkpActivity | null>(null);
@@ -125,11 +128,11 @@ export default function HomePage() {
 
     const { data, error: queryError } = await supabase
       .from("skp_activities")
-      .select("id,tanggal,aktivitas,indikator,photo_upload_status,drive_file_url,created_at")
+      .select("id,tanggal,aktivitas,indikator,photo_upload_status,drive_file_url,created_at,waktu_mulai,waktu_selesai")
       .order("tanggal", { ascending: false })
       .order("created_at", { ascending: false });
 
-    if (queryError) setError(queryError.message);
+    if (queryError) setError(explainDatabaseError(queryError.message));
     else setActivities((data ?? []) as SkpActivity[]);
   }, [userId]);
 
@@ -286,6 +289,12 @@ export default function HomePage() {
       return;
     }
 
+    const timeError = validateTimeRange(timeRange.start, timeRange.end);
+    if (timeError) {
+      setError(timeError);
+      return;
+    }
+
     const selectedEvidence = evidence;
     if (selectedEvidence) {
       if (googleDriveConnected !== true) {
@@ -307,6 +316,8 @@ export default function HomePage() {
         tanggal: date || todayInMakassar(),
         aktivitas: activity.trim(),
         indikator: indicator,
+        waktu_mulai: toDatabaseTime(timeRange.start),
+        waktu_selesai: toDatabaseTime(timeRange.end),
         source: "web",
         photo_upload_status: selectedEvidence ? "pending" : "not_required",
       })
@@ -315,12 +326,13 @@ export default function HomePage() {
     setSaving(false);
 
     if (insertError || !insertedActivity) {
-      setError(insertError?.message || "Aktivitas gagal disimpan.");
+      setError(insertError ? explainDatabaseError(insertError.message) : "Aktivitas gagal disimpan.");
       return;
     }
 
     setActivity("");
     setDate(todayInMakassar());
+    setTimeRange(defaultTimeRange());
     setIndicator("");
     setEvidence(null);
     setEvidenceInputKey(current => current + 1);
@@ -394,6 +406,10 @@ export default function HomePage() {
     setEditingId(item.id);
     setEditActivity(item.aktivitas);
     setEditDate(item.tanggal);
+    setEditTimeRange({
+      start: normalizeTime(item.waktu_mulai) ?? "",
+      end: normalizeTime(item.waktu_selesai) ?? "",
+    });
     setEditIndicator(item.indikator);
   }
 
@@ -401,6 +417,7 @@ export default function HomePage() {
     setEditingId(null);
     setEditActivity("");
     setEditDate("");
+    setEditTimeRange({ start: "", end: "" });
     setEditIndicator("");
   }
 
@@ -418,6 +435,12 @@ export default function HomePage() {
       return;
     }
 
+    const timeError = validateTimeRange(editTimeRange.start, editTimeRange.end);
+    if (timeError) {
+      setError(timeError);
+      return;
+    }
+
     setUpdatingActivityId(activityId);
     try {
       const { data: updatedActivity, error: updateError } = await supabase
@@ -426,6 +449,8 @@ export default function HomePage() {
           tanggal: editDate,
           aktivitas: editActivity.trim(),
           indikator: editIndicator,
+          waktu_mulai: toDatabaseTime(editTimeRange.start),
+          waktu_selesai: toDatabaseTime(editTimeRange.end),
           updated_at: new Date().toISOString(),
         })
         .eq("id", activityId)
@@ -433,7 +458,7 @@ export default function HomePage() {
         .select("id")
         .maybeSingle();
 
-      if (updateError) throw new Error(updateError.message);
+      if (updateError) throw new Error(explainDatabaseError(updateError.message));
       if (!updatedActivity) throw new Error("Aktivitas tidak ditemukan atau Anda tidak memiliki akses untuk mengubahnya.");
 
       cancelEdit();
@@ -579,6 +604,10 @@ export default function HomePage() {
         <form onSubmit={saveActivity} className="form-grid">
           <label className="full">Aktivitas<textarea value={activity} onChange={e=>setActivity(e.target.value)} placeholder="Contoh: Menyusun lesson plan untuk unit kompetensi..." rows={3} required /></label>
           <label>Tanggal<input type="date" value={date || todayInMakassar()} onChange={e=>setDate(e.target.value)} required /></label>
+          <div className="full time-range-field">
+            <TimeRangeSlider start={timeRange.start} end={timeRange.end} onChange={(start, end) => setTimeRange({ start, end })} />
+            <span className="field-hint">Waktu mulai dan selesai aktivitas. Kosongkan kedua kolom bila tidak perlu dicatat.</span>
+          </div>
           <label className="full">Indikator SKP
             <select value={indicator} onChange={e=>setIndicator(e.target.value as SkpIndicator)} required>
               <option value="">Pilih satu indikator</option>
@@ -631,7 +660,7 @@ export default function HomePage() {
         {exportError && <p className="alert error" role="alert">{exportError}</p>}
         {activities.length === 0 ? <div className="empty">Belum ada aktivitas. Tambahkan catatan pertama melalui formulir di atas.</div> :
           <div className="activity-list">{activities.map(item=><article className="activity" key={item.id}>
-            <div className="activity-meta"><span>{formatDate(item.tanggal)}</span><span className="status">{item.photo_upload_status === "uploaded" ? "Bukti tersimpan" : item.photo_upload_status === "failed" ? "Upload bukti gagal" : item.photo_upload_status === "pending" ? "Menunggu upload bukti" : "Tanpa bukti"}</span></div>
+            <div className="activity-meta"><span>{[formatDate(item.tanggal), formatTimeRange(item.waktu_mulai, item.waktu_selesai)].filter(Boolean).join(" · ")}</span><span className="status">{item.photo_upload_status === "uploaded" ? "Bukti tersimpan" : item.photo_upload_status === "failed" ? "Upload bukti gagal" : item.photo_upload_status === "pending" ? "Menunggu upload bukti" : "Tanpa bukti"}</span></div>
             {editingId !== item.id && <><p>{item.aktivitas}</p><small>{item.indikator}</small></>}
             {editingId === item.id ? (
               <form className="form-grid edit-form" onSubmit={event => void updateActivity(event, item.id)}>
@@ -641,6 +670,9 @@ export default function HomePage() {
                 <label>Tanggal
                   <input type="date" value={editDate} onChange={event => setEditDate(event.target.value)} required />
                 </label>
+                <div className="full">
+                  <TimeRangeSlider start={editTimeRange.start} end={editTimeRange.end} onChange={(start, end) => setEditTimeRange({ start, end })} />
+                </div>
                 <label className="full">Indikator SKP
                   <select value={editIndicator} onChange={event => setEditIndicator(event.target.value as SkpIndicator)} required>
                     <option value="">Pilih satu indikator</option>

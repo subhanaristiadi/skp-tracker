@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { Workbook } from "@ayocore/exceljs";
+import { formatTimeRange } from "@/lib/skp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +10,8 @@ type ActivityRow = {
   aktivitas: string;
   indikator: string;
   photo_upload_status: "not_required" | "pending" | "uploaded" | "failed";
+  waktu_mulai: string | null;
+  waktu_selesai: string | null;
 };
 
 const PAGE_SIZE = 1000;
@@ -75,7 +78,7 @@ export async function GET(request: Request) {
     while (true) {
       const { data, error } = await supabase
         .from("skp_activities")
-        .select("tanggal,aktivitas,indikator,photo_upload_status,created_at")
+        .select("tanggal,aktivitas,indikator,photo_upload_status,waktu_mulai,waktu_selesai,created_at")
         .gte("tanggal", startDate)
         .lt("tanggal", endDate)
         .order("tanggal", { ascending: false })
@@ -109,29 +112,30 @@ export async function GET(request: Request) {
     worksheet.columns = [
       { key: "number", width: 8 },
       { key: "tanggal", width: 16 },
+      { key: "waktu", width: 16 },
       { key: "aktivitas", width: 58 },
       { key: "indikator", width: 78 },
       { key: "bukti", width: 16 },
     ];
 
-    worksheet.mergeCells("A1:E1");
+    worksheet.mergeCells("A1:F1");
     worksheet.getCell("A1").value = "RIWAYAT AKTIVITAS SKP";
     worksheet.getCell("A1").font = { name: "Arial", size: 16, bold: true, color: { argb: "FF173B73" } };
     worksheet.getCell("A1").alignment = { vertical: "middle" };
     worksheet.getRow(1).height = 30;
 
-    worksheet.mergeCells("A2:E2");
+    worksheet.mergeCells("A2:F2");
     worksheet.getCell("A2").value = `Periode: ${periodLabel}`;
     worksheet.getCell("A2").font = { name: "Arial", size: 11, color: { argb: "FF475569" } };
     worksheet.getRow(2).height = 22;
 
-    worksheet.mergeCells("A3:E3");
+    worksheet.mergeCells("A3:F3");
     worksheet.getCell("A3").value = `Jumlah aktivitas: ${activities.length}`;
     worksheet.getCell("A3").font = { name: "Arial", size: 10, color: { argb: "FF475569" } };
     worksheet.getRow(3).height = 20;
 
     worksheet.addRow([]);
-    const headerRow = worksheet.addRow(["No.", "Tanggal", "Aktivitas", "Indikator SKP", "Bukti"]);
+    const headerRow = worksheet.addRow(["No.", "Tanggal", "Waktu", "Aktivitas", "Indikator SKP", "Bukti"]);
     headerRow.height = 26;
     headerRow.eachCell((cell) => {
       cell.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
@@ -141,7 +145,7 @@ export async function GET(request: Request) {
     });
 
     if (activities.length === 0) {
-      worksheet.mergeCells("A6:E6");
+      worksheet.mergeCells("A6:F6");
       worksheet.getCell("A6").value = "Tidak ada aktivitas pada periode ini.";
       worksheet.getCell("A6").font = { name: "Arial", size: 10, italic: true, color: { argb: "FF687386" } };
       worksheet.getCell("A6").alignment = { horizontal: "center", vertical: "middle" };
@@ -151,6 +155,7 @@ export async function GET(request: Request) {
         const row = worksheet.addRow([
           index + 1,
           formatDate(item.tanggal),
+          formatTimeRange(item.waktu_mulai, item.waktu_selesai) || "-",
           item.aktivitas,
           item.indikator,
           item.photo_upload_status === "uploaded" ? "Sudah" : "Belum",
@@ -163,10 +168,11 @@ export async function GET(request: Request) {
         });
         row.getCell(1).alignment = { horizontal: "center", vertical: "top" };
         row.getCell(2).alignment = { horizontal: "center", vertical: "top" };
+        row.getCell(3).alignment = { horizontal: "center", vertical: "top" };
       });
     }
 
-    worksheet.autoFilter = { from: "A5", to: `E${Math.max(5, 5 + activities.length)}` };
+    worksheet.autoFilter = { from: "A5", to: `F${Math.max(5, 5 + activities.length)}` };
     worksheet.views = [{ state: "frozen", ySplit: 5, topLeftCell: "A6" }];
     worksheet.pageSetup = {
       orientation: "landscape",

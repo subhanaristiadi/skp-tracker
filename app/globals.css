@@ -37,3 +37,23 @@
 .delete-reminder a{display:inline-flex;align-items:center;gap:6px;margin-top:9px;color:#2457d6;font-weight:600;text-decoration:none}
 .delete-reminder a:hover{text-decoration:underline}
 @media(max-width:650px){.activity-evidence-actions{align-items:flex-start;flex-wrap:wrap}.delete-confirmation-actions,.edit-actions{justify-content:stretch}.delete-confirmation-actions button,.edit-actions button{flex:1}}
+
+/* Waktu Mulai-Selesai */
+.time-range-field{display:grid;gap:7px}
+.time-range{display:grid;gap:8px}
+.time-range-title{font-size:16px;font-weight:700;color:#333f4d}
+.time-range-box{display:grid;gap:16px;background:#fff;border:1px solid #cfd6e0;border-radius:8px;padding:14px 18px 18px}
+.time-range-values{display:flex;justify-content:center}
+.time-range-input{width:96px;padding:5px 6px;border:2px solid #00969b;border-radius:8px 0 0 8px;background:#fff;color:#26313d;font-size:16px;font-weight:700;text-align:center}
+.time-range-input + .time-range-input{border-radius:0 8px 8px 0;margin-left:-2px}
+.time-range-input::-webkit-calendar-picker-indicator{opacity:.45}
+.time-range-input:focus{border-color:#007b80;box-shadow:0 0 0 3px #00969b26}
+.time-range-track{position:relative;height:10px;margin:8px 15px 10px;border-radius:999px;background:#eee;cursor:pointer;touch-action:none}
+.time-range-fill{position:absolute;top:0;bottom:0;border-radius:999px;background:#00b0b9}
+.time-range-thumb{position:absolute;top:50%;width:30px;height:30px;padding:0;margin:0;transform:translate(-50%,-50%);display:inline-flex;align-items:center;justify-content:center;gap:4px;border:1px solid #ddd;border-radius:9px;background:#fff;box-shadow:0 1px 4px #1118272e;cursor:grab;touch-action:none}
+.time-range-thumb:hover{border-color:#c9d1da}
+.time-range-thumb:active{cursor:grabbing}
+.time-range-thumb:focus-visible{outline:2px solid #00969b;outline-offset:2px}
+.time-range-thumb:disabled{opacity:.55;cursor:not-allowed}
+.time-range-grip{display:block;width:2px;height:12px;border-radius:1px;background:#c3ccd4}
+@media(max-width:650px){.time-range-box{padding:12px 14px 16px}.time-range-track{margin:8px 13px 10px}}

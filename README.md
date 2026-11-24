@@ -10,6 +10,7 @@ Included:
 - Create, list, edit, and delete SKP activities.
 - Manual selection from the exact six official SKP indicators.
 - Activity date handling based on Asia/Makassar (WITA).
+- Optional activity start and end time (`Waktu Mulai-Selesai`).
 - Supabase SQL migration with closed-list validation, per-user Row Level Security, and explicit Data API grants.
 
 Not included yet:
@@ -107,6 +108,7 @@ The activity history can be exported as an Excel workbook from the **Riwayat Akt
 |---|---|
 | No. | Sequential number within the exported report. |
 | Tanggal | Activity date, formatted as `DD-MM-YYYY`. |
+| Waktu | Activity start-end time as `HH:MM–HH:MM`, or `-` when no time was recorded. |
 | Aktivitas | Activity description saved in SKP Tracker. |
 | Indikator SKP | The official SKP indicator selected when the activity was recorded. |
 | Bukti | Indicates whether an evidence file (image or document) has been uploaded successfully to Google Drive. |
@@ -138,6 +140,17 @@ Only `uploaded` is reported as **Sudah**. All other supported states are reporte
 - The update query is scoped to both the activity ID and signed-in user's ID, and remains subject to the existing `authenticated` UPDATE RLS policy. No service-role key, RLS-policy change, environment variable, or database migration is required.
 - Saving an edit updates `updated_at`. It does not alter `drive_file_id`, `drive_file_url`, or `photo_upload_status`; existing evidence files and their upload status are preserved.
 - While editing, the evidence upload and delete actions for that activity are hidden to avoid conflicting changes. The **Batal** action leaves the saved activity unchanged.
+
+## Waktu Mulai-Selesai (activity time range)
+
+Each activity can record an optional start and end time next to its date.
+
+- The **Waktu Mulai-Selesai** field appears in the add form and in the edit form. The two time inputs are native `time` controls; the track below them has two handles that can be dragged, clicked, or moved with the arrow keys (5-minute steps, 30-minute with Page Up/Page Down).
+- Times are wall-clock WITA values stored as `time without time zone`; they are never converted between time zones, and the activity date stays in `tanggal`.
+- The range is optional but atomic: either both times are empty or both are filled, and the end must be later than the start. The database enforces the same rule through `skp_activities_waktu_range_check`.
+- A new activity is pre-filled with a 90-minute block ending at the current Asia/Makassar time. Clearing both inputs stores no time.
+- The range is shown in the activity history and in the **Waktu** column of the monthly XLSX export.
+- Migration required: apply `supabase/migrations/20261124152200_activity_time_range.sql` (adds `waktu_mulai` and `waktu_selesai`). Existing rows keep `null`. Until it is applied, saving or listing an activity shows a hint pointing to this migration instead of a raw PostgREST error.
 
 ## Google Drive evidence upload
 
@@ -212,6 +225,8 @@ Table: `public.skp_activities`
 | id | uuid | Primary key |
 | user_id | uuid | Supabase Auth owner |
 | tanggal | date | Activity date |
+| waktu_mulai | time nullable | Optional activity start time (WITA wall clock, no timezone conversion) |
+| waktu_selesai | time nullable | Optional activity end time; must be later than `waktu_mulai` |
 | aktivitas | text | Activity description |
 | indikator | text | One exact official SKP indicator |
 | source | text | Defaults to `web` |
@@ -247,6 +262,7 @@ This is the SKP Activity Tracker application schema, separate from the existing 
 - [ ] Activity appears in history after save and page refresh.
 - [ ] A second user cannot read or modify the first user's rows (RLS test).
 - [ ] The owner can edit an activity's date, description, and official indicator without changing its Drive metadata or evidence status.
+- [ ] Saving an activity with a time range stores both values, and the history plus the XLSX `Waktu` column show `10:00–11:30`.
 - [ ] Monthly XLSX export downloads the selected month and contains the expected rows.
 - [ ] Evidence upload requires authentication and rejects unsupported or signature-mismatched files, empty files, and files over 4 MB.
 - [ ] Successful Drive upload records the Drive file ID, URL, and uploaded status.

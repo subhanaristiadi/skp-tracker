@@ -1,16 +1,21 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Check, Download, ExternalLink, LogOut, Paperclip, Pencil, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
+import { HistoryPagination } from "@/components/history-pagination";
 import { TimeRangeSlider } from "@/components/time-range-slider";
 import { supabase } from "@/lib/supabase";
 import { defaultTimeRange, EVIDENCE_ACCEPT, explainDatabaseError, formatDate, formatTimeRange, normalizeTime, SKP_INDICATORS, SkpActivity, SkpIndicator, todayInMakassar, toDatabaseTime, validateEvidenceFile, validateTimeRange } from "@/lib/skp";
+
+const HISTORY_PAGE_SIZE = 10;
 
 export default function HomePage() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [activities, setActivities] = useState<SkpActivity[]>([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const historyListRef = useRef<HTMLDivElement | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -49,6 +54,19 @@ export default function HomePage() {
   } | null>(null);
   const [googleDriveConnected, setGoogleDriveConnected] = useState<boolean | null>(null);
   const [googleDriveBusy, setGoogleDriveBusy] = useState(false);
+
+  const totalPages = Math.max(1, Math.ceil(activities.length / HISTORY_PAGE_SIZE));
+  // Deleting the last row of the last page shrinks the list; clamp instead of resetting.
+  const currentPage = Math.min(historyPage, totalPages);
+  const pagedActivities = useMemo(
+    () => activities.slice((currentPage - 1) * HISTORY_PAGE_SIZE, currentPage * HISTORY_PAGE_SIZE),
+    [activities, currentPage],
+  );
+
+  const changePage = useCallback((next: number) => {
+    setHistoryPage(next);
+    historyListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   useEffect(() => {
     if (!supabase) {
@@ -334,6 +352,7 @@ export default function HomePage() {
     setDate(todayInMakassar());
     setTimeRange(defaultTimeRange());
     setIndicator("");
+    setHistoryPage(1);
     setEvidence(null);
     setEvidenceInputKey(current => current + 1);
     setMessage("Aktivitas berhasil disimpan.");
@@ -658,8 +677,8 @@ export default function HomePage() {
         </div>
         {exportMessage && <p className="alert success" role="status">{exportMessage}</p>}
         {exportError && <p className="alert error" role="alert">{exportError}</p>}
-        {activities.length === 0 ? <div className="empty">Belum ada aktivitas. Tambahkan catatan pertama melalui formulir di atas.</div> :
-          <div className="activity-list">{activities.map(item=><article className="activity" key={item.id}>
+        {activities.length === 0 ? <div className="empty">Belum ada aktivitas. Tambahkan catatan pertama melalui formulir di atas.</div> : (
+          <><div className="activity-list" ref={historyListRef}>{pagedActivities.map(item=><article className="activity" key={item.id}>
             <div className="activity-meta"><span>{[formatDate(item.tanggal), formatTimeRange(item.waktu_mulai, item.waktu_selesai)].filter(Boolean).join(" · ")}</span><span className="status">{item.photo_upload_status === "uploaded" ? "Bukti tersimpan" : item.photo_upload_status === "failed" ? "Upload bukti gagal" : item.photo_upload_status === "pending" ? "Menunggu upload bukti" : "Tanpa bukti"}</span></div>
             {editingId !== item.id && <><p>{item.aktivitas}</p><small>{item.indikator}</small></>}
             {editingId === item.id ? (
@@ -761,7 +780,11 @@ export default function HomePage() {
                 </button>
               </div>
             )}
-          </article>)}</div>}
+          </article>)}</div>
+            {totalPages > 1 && (
+              <HistoryPagination currentPage={currentPage} totalItems={activities.length} pageSize={HISTORY_PAGE_SIZE} onChange={changePage} />
+            )}
+          </>)}
       </section>
       <footer>SKP Activity Tracker · Zona waktu acuan: Asia/Makassar (WITA)</footer>
     </main>

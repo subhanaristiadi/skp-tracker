@@ -127,6 +127,13 @@ The **Bukti** value is derived from the existing `skp_activities.photo_upload_st
 Only `uploaded` is reported as **Sudah**. All other supported states are reported as **Belum**. An activity is not marked **Sudah** until its evidence file has been uploaded and the status has been saved as `uploaded`.
 
 
+## Browsing the activity history
+
+- The history lists **10 activities per page**, newest first, with a page control at the bottom: numbered pages, a jump to the first page, and a jump to the last page. The current page is highlighted.
+- A counter next to the control shows the visible range, for example `Menampilkan 11–20 dari 47 aktivitas`.
+- Paging happens in the browser on the list that is already loaded, so changing pages sends no additional Supabase request. Saving a new activity returns to page 1 so the new row is visible.
+- The monthly XLSX export is not paginated; it always contains every activity of the selected month.
+
 ## Deleting an activity
 
 - The owner can delete an activity from the history list. The browser asks for confirmation before removing the Supabase row.
